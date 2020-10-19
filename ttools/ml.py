@@ -58,4 +58,10 @@ def get_lda_params(X, y):
 def get_pca_params(X, k=2):
     df = pd.DataFrame(X)
     evals, evecs = np.linalg.eigh(df.cov())
+    print(f"variance explained: {evals[:-k-1:-1].sum() / evals.sum()}")
     return evals[:-k-1:-1], evecs[:, :-k-1:-1]
+
+
+def pca_projection(X, w):
+    m = bn.nanmean(X, axis=0)
+    return np.where(np.isfinite(X), X - m, 0) @ w
