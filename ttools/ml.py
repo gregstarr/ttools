@@ -1,45 +1,33 @@
 import pandas as pd
 import numpy as np
 import bottleneck as bn
-from skimage.util import view_as_windows, pad
+from scipy.sparse import csr_matrix
+from sklearn.metrics.pairwise import haversine_distances
 
-from ttools.trough_model import get_model
+
+def get_spherical_rbf_matrix(lat_vals, lon_vals, bandwidth, downsampling=2):
+    imw = lon_vals.shape[0]
+    lon_grid, lat_grid = np.meshgrid(lon_vals, lat_vals)
+    latlon_ds = np.column_stack((lat_vals[::downsampling], lon_grid[::downsampling, 0]))
+    latlon_full = np.column_stack((lat_grid.ravel(), lon_grid.ravel()))
+    osize = latlon_full.shape[0]
+    dsize = osize // downsampling**2
+    dist = haversine_distances(latlon_full, latlon_ds)
+    scaled_bandwidth = np.where(dist == 0, 999, dist).min(axis=0).max() * bandwidth
+    basis = np.exp(-(dist / scaled_bandwidth) ** 2)
+    basis[basis < .01] = 0
+
+    cols = downsampling * np.arange(dsize)[None, :] // imw
+    rows = (imw * (np.arange(osize)[:, None] // imw) + (np.arange(osize)[:, None] - np.arange(dsize)[None, :] * 2) % imw)
+
+    basis = basis[rows, cols]
+    return csr_matrix(basis)
 
 
 def normalize_features(X):
     m = bn.nanmean(X, axis=0)
     s = bn.nanstd(X, axis=0)
     return (X - m) / s
-
-
-def get_features(tec, mlt, mlat, ut, patch_size=3):
-    """features: mlat, mlt, tec, gradients, distance above model, distance below model, distance below auroral oval,
-    collect all these features for a 3x3 or 5x5 area around a particular pixel
-    """
-    # already have tec, mlat
-    # gradient
-    grad = np.gradient(tec, axis=0)
-    grad1 = np.maximum(0, grad)
-    grad2 = np.maximum(0, -grad)
-    # stack together and extract patches
-    image = np.stack((tec, grad1, grad2), axis=-1)
-    pad_size = (patch_size - 1) // 2
-    patches = view_as_windows(pad(image, ((pad_size, pad_size), (pad_size, pad_size), (0, 0)), mode='wrap'),
-                              (patch_size, patch_size, image.shape[-1]))
-    patches = patches.reshape(image.shape[:2] + (-1,))  # turn back to many-channeled image
-    patches = patches.reshape((-1, patches.shape[2]))  # turn to list of feature vectors
-    # turn mlt into sin and cos
-    theta = mlt * np.pi / 12
-    sin_mlt = np.sin(theta)
-    cos_mlt = np.cos(theta)
-    # get the modelled mlat
-    model = get_model(ut, mlt[0])
-    # create features for above and below model
-    above = np.maximum(0, mlat - model)
-    below = np.maximum(0, model - mlat)
-    # add in other features
-    features = np.column_stack((patches, sin_mlt.ravel(), cos_mlt.ravel(), above.ravel(), below.ravel()))
-    return features
 
 
 def get_lda_params(X, y):
