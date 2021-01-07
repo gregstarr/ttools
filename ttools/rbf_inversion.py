@@ -64,6 +64,8 @@ def extract_patches(x, patch_size):
 
 
 def estimate_background(x, patch_size):
+    if not patch_size % 2:
+        patch_size += 1
     patches = extract_patches(x, patch_size)
     return bn.nanmean(patches, axis=-1)
 
@@ -141,9 +143,25 @@ def downsample_2d_array(arr, ds):
     return bn.nanmean(windows.reshape(windows.shape[:2] + (-1, )), axis=-1)
 
 
+DEFAULT_PARAMS = {
+    'tv_weight': .06,
+    'l2_weight': .05,
+    'bge_spatial_size': 17,
+    'bge_temporal_rad': 1,
+    'cos_mlat': True,
+    'rbf_bw': 1,
+    'tv_hw': 1,
+    'tv_vw': 1,
+    'model_weight_max': 10,
+    'perimeter_th': 50
+}
+
+
 class RbfIversion:
 
-    def __init__(self, mlt_grid, mlat_grid, tv_weight=.06, l2_weight=.05, ds=None):
+    def __init__(self, mlt_grid, mlat_grid, ds=None, **params):
+        self.params = DEFAULT_PARAMS.copy()
+        self.params.update(**params)
         self.ds = ds
         if ds is not None:
             self.mlt_grid = downsample_2d_array(mlt_grid, ds)
@@ -159,22 +177,25 @@ class RbfIversion:
         self.d = self.mlt_grid.size
         self.shape = self.mlt_grid.shape
         mlat = np.deg2rad(self.mlat_grid[:, 0])
-        mlat_cost_weight = np.cos(mlat)
+        if self.params['cos_mlat']:
+            mlat_cost_weight = np.cos(mlat)
+        else:
+            mlat_cost_weight = np.ones_like(mlat)
         self.mlat_cost_weight = (mlat_cost_weight[:, None] * np.ones((1, self.shape[1]))).ravel()
 
-        self.basis = get_rbf_matrix(self.shape, 1)
-        self.tv = get_tv_matrix(self.shape, hw=2)
+        self.basis = get_rbf_matrix(self.shape, self.params['rbf_bw'])
+        self.tv = get_tv_matrix(self.shape, hw=self.params['tv_hw'], vw=self.params['tv_vw'])
 
         self.tv_weight = cp.Parameter(nonneg=True)
-        self.tv_weight.value = tv_weight
+        self.tv_weight.value = self.params['tv_weight']
         self.l2_weight = cp.Parameter(nonneg=True)
-        self.l2_weight.value = l2_weight
+        self.l2_weight.value = self.params['l2_weight']
 
     def run(self, x, ut):
         model = trough_model.get_model(ut, self.mlt_grid[0])
         model_weight = (self.mlat_grid - model[None, :]) ** 2
         model_weight = model_weight.ravel()
-        model_weight /= (model_weight.max() / 10)
+        model_weight /= (model_weight.max() / self.params['model_weight_max'])
         model_weight += 1
 
         fin_mask = np.isfinite(x.ravel())
@@ -194,14 +215,14 @@ class RbfIversion:
     def decision(u):
         return u >= 1
 
-    def postprocess_labels(self, u, morph_size=1, area_th=50, perimeter_th=50, wrap=10):
+    def postprocess_labels(self, u, wrap=10):
+        if u.sum() == 0:
+            return u
         padded = np.pad(u, ((0, 0), (wrap, wrap)), mode='wrap')
-        # morphed = morphology.binary_opening(padded, morphology.disk(morph_size))
-        # trimmed = morphed[morph_size:-morph_size, morph_size:-morph_size]
         labeled = measure.label(padded, connectivity=2)
         props = pandas.DataFrame(measure.regionprops_table(labeled, properties=('label', 'area', 'perimeter')))
         labeled = labeled[:, wrap:-wrap]
-        for i, r in props[props['perimeter'] < perimeter_th].iterrows():
+        for i, r in props[props['perimeter'] < self.params['perimeter_th']].iterrows():
             u[labeled == r['label']] = 0
         return u
 
@@ -210,8 +231,10 @@ class RbfIversion:
         return f(self.output_mlt, self.output_mlat)
 
     def load_and_preprocess(self, year, month, index):
-        ut, tec = get_tec_map_interval(year, month, index, time_radius=1)
+        ut, tec = get_tec_map_interval(year, month, index, time_radius=self.params['bge_temporal_rad'])
+        if ut.shape[0] < (2 * self.params['bge_temporal_rad'] + 1):
+            return None, None, None
         ut = ut[ut.shape[0] // 2]
         original = tec[:, :, tec.shape[-1] // 2]
-        x = preprocess_tec_interval(tec, 17)
+        x = preprocess_tec_interval(tec, self.params['bge_spatial_size'])
         return downsample_2d_array(x, self.ds), ut, original

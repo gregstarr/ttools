@@ -1,9 +1,0 @@
-numpy
-scipy
-scikit-image
-scikit-learn
-bottleneck
-pandas
-pytest
-h5py
-apexpy

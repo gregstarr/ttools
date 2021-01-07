@@ -1,0 +1,19 @@
+name: ttools
+channels:
+  - conda-forge
+  - rstoneback
+dependencies:
+  - python=3.7
+  - numpy
+  - scipy
+  - scikit-image
+  - scikit-learn
+  - bottleneck
+  - pandas
+  - pytest
+  - h5py
+  - cvxpy
+  - pysatCDF
+  - pip
+  - pip:
+    - apexpy

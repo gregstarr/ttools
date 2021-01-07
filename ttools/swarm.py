@@ -59,7 +59,10 @@ def get_swarm_file_by_time(datetime, sat, base_dir="E:\\swarm\\extracted"):
 
 def get_swarm_file(year, month, day, sat, base_dir="E:\\swarm\\extracted"):
     fn_pattern = os.path.join(base_dir, "SW_EXTD_EFI{sat}_LP_HM_{year:04d}{month:02d}{day:02d}*.cdf")
-    return glob.glob(fn_pattern.format(sat=sat, year=year, month=month, day=day))[-1]
+    files = glob.glob(fn_pattern.format(sat=sat, year=year, month=month, day=day))
+    if not files:
+        return None
+    return files[-1]
 
 
 def get_enter_exit(enter_mask, exit_mask, min_length=50):
@@ -234,17 +237,27 @@ class SwarmDataInterval:
         tec_time = np.datetime64(f"{year:04d}-{month:02d}-{day:02d}T{hour:02d}:00:00")
         start_time = tec_time - interval_radius
         start_file = get_swarm_file_by_time(start_time, sat)
+        if start_file is None:
+            return None
         end_time = tec_time + interval_radius + np.timedelta64(1, 'h')
         end_file = get_swarm_file_by_time(end_time, sat)
+        if end_file is None:
+            return None
         start_data = cls.open_file(start_file)
+        if np.mean(start_data['MLT'] == 0) > .5:
+            return None
         if end_file != start_file:
             data = {}
             end_data = cls.open_file(end_file)
+            if np.mean(end_data['MLT'] == 0) > .5:
+                return None
             for f in start_data:
                 data[f] = np.concatenate((start_data[f], end_data[f]))
         else:
             data = start_data
         sl = slice(np.argmax(data['Timestamp'] >= start_time), np.argmax(data['Timestamp'] > end_time))
+        if sl.stop - sl.start < (2 * interval_radius.astype(int) + 1) * 60 * 60:
+            return None
         interval = cls(data, sl, tec_time)
         interval.process()
         return interval
@@ -306,6 +319,10 @@ class SwarmSegment:
     def find_trough(self, smooth_width=20):
         mlat = self.data['MLat']
         self.data['dne'] = self.data['logn'] - self.data['background']
+        fin = np.isfinite(self.data['dne'])
+        if np.any(~fin):
+            self.data['dne'] = np.interp(np.arange(self.data['dne'].shape[0]),
+                                         np.arange(self.data['dne'].shape[0])[fin], self.data['dne'][fin])
         self.data['smooth_dne'] = centered_bn_func(bn.move_mean, self.data['dne'], smooth_width, pad=True, min_count=1)
         trough = find_troughs_in_segment(mlat, self.data['smooth_dne'])
         if trough:
