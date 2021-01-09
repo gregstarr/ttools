@@ -14,6 +14,7 @@ tec_file_pattern = os.path.join(tec_dir, "{year:04d}_{month:02d}_tec.h5")
 
 # SWARM data directory
 swarm_dir = "E:\\swarm\\extracted"
+swarm_coords_dir = "E:\\swarm\\coordinates"
 
 grid_file = os.path.join(tec_dir, "grid.h5")
 # with h5py.File(grid_file, 'r') as f:

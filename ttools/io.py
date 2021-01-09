@@ -5,11 +5,12 @@ import os
 import glob
 import h5py
 import pysatCDF
+import itertools
 
 from ttools import utils, config
 
 
-OMNI_COLUMNS = [
+OMNI_COLUMNS = (
     "rotation_number",
     "imf_id",
     "sw_id",
@@ -62,9 +63,9 @@ OMNI_COLUMNS = [
     "al",
     "au",
     "magnetosonic_mach_number",
-]
+)
 
-SWARM_FIELDS = [
+ALL_SWARM_FIELDS = (
     'Latitude',
     'Longitude',
     'Height',
@@ -86,7 +87,37 @@ SWARM_FIELDS = [
     'Vs_lgn',
     'U_SC',
     'Flagbits',
-]
+)
+
+
+SWARM_FIELDS_LESS_MAG_COORDS = (
+    'Latitude',
+    'Longitude',
+    'Height',
+    'Radius',
+    'SZA',
+    'SAz',
+    'ST',
+    'n',
+    'Te_hgn',
+    'Te_lgn',
+    'T_elec',
+    'Vs_hgn',
+    'Vs_lgn',
+    'U_SC',
+    'Flagbits',
+)
+
+
+SWARM_NEW_COORDS = (
+    'apex_lat',
+    'apex_lon',
+    'qd_lat',
+    'qd_lon',
+    'mlt',
+    'lat',
+    'lon',
+)
 
 
 def get_gm_index_kyoto(fn="E:\\2000_2020_kp_ap.txt"):
@@ -229,7 +260,12 @@ def open_madrigal_file(fn):
     return tec, timestamps, lat, lon
 
 
-def get_swarm_data(start_date, end_date, sat, fields=SWARM_FIELDS, dir=config.swarm_dir):
+def get_swarm_data(start_date, end_date, sat, data_dir=config.swarm_dir, coords_dir=config.swarm_coords_dir):
+    if coords_dir is not None:
+        fields = SWARM_FIELDS_LESS_MAG_COORDS + SWARM_NEW_COORDS
+    else:
+        fields = ALL_SWARM_FIELDS
+
     dt = np.timedelta64(500, 'ms')
     dt_sec = dt.astype('timedelta64[ms]').astype(float)
     start_date = (np.ceil(start_date.astype('datetime64[ms]').astype(float) / dt_sec) * dt_sec).astype('datetime64[ms]')
@@ -243,9 +279,13 @@ def get_swarm_data(start_date, end_date, sat, fields=SWARM_FIELDS, dir=config.sw
         y = file_dates[i, 0]
         m = file_dates[i, 1]
         d = file_dates[i, 2]
-        files = glob.glob(os.path.join(dir, f"SW_EXTD_EFI{sat.upper()}_LP_HM_{y:04d}{m:02d}{d:02d}*.cdf"))
+        files = glob.glob(os.path.join(data_dir, f"SW_EXTD_EFI{sat.upper()}_LP_HM_{y:04d}{m:02d}{d:02d}*.cdf"))
+        files = filter_swarm_files(files)
         for fn in files:
             file_data = open_swarm_file(fn)
+            if coords_dir is not None:
+                coords_fn = os.path.join(coords_dir, f"{utils.no_ext_fn(fn)}_coords.h5")
+                file_data.update(open_swarm_coords_file(coords_fn))
             file_times_ut = (np.floor(file_data['Timestamp'].astype('datetime64[ms]').astype(float) / dt_sec) * dt_sec)
             # assume ut is increasing and has no repeating entries, basically that it is a subset of ref_times_ut
             r_mask = np.in1d(ref_times_ut, file_times_ut)
@@ -256,8 +296,19 @@ def get_swarm_data(start_date, end_date, sat, fields=SWARM_FIELDS, dir=config.sw
     return data, ref_times
 
 
+def filter_swarm_files(files):
+    result = []
+    base = [(os.path.split(fn)[0], utils.no_ext_fn(fn)) for fn in files]
+    splitup = [(b[:-4], b[-4:], a) for a, b in base]
+    splitup = sorted(splitup, key=lambda x: x[0])
+    for key, grp in itertools.groupby(splitup, lambda x: x[0]):
+        latest_version = sorted(grp, key=lambda x: x[1])[-1]
+        result.append(os.path.join(latest_version[2], f"{latest_version[0]}{latest_version[1]}.cdf"))
+    return result
+
+
 def open_swarm_file(fn):
-    """Opens a SWARM file
+    """Opens a SWARM file (extended plasma dataset)
 
     Parameters
     ----------
@@ -294,6 +345,31 @@ def open_swarm_file(fn):
     return data
 
 
+def open_swarm_coords_file(fn):
+    """Opens precomputed swarm coordinates h5 file (one per swarm cdf file)
+
+    Parameters
+    ----------
+    fn: str
+
+    Returns
+    -------
+    dict of numpy.ndarray[float]
+        keys: 'apex_lat', 'apex_lon', 'qd_lat', 'qd_lon', 'mlt'
+    """
+    coords = {}
+    with h5py.File(fn, 'r') as f:
+        coords['apex_lat'] = f['apex_lat'][()]
+        coords['apex_lon'] = f['apex_lon'][()]
+        coords['qd_lat'] = f['qd_lat'][()]
+        coords['qd_lon'] = f['qd_lon'][()]
+        coords['mlt'] = f['mlt'][()]
+        coords['lat'] = f['lat'][()]
+        coords['lon'] = f['lon'][()]
+    print(f"Opened swarm coords file: {fn}, size: {coords['apex_lat'].shape}")
+    return coords
+
+
 def write_file(fn, **kwargs):
     """Writes an h5 file with data specified by kwargs.
 
@@ -306,7 +382,3 @@ def write_file(fn, **kwargs):
     with h5py.File(fn, 'w') as f:
         for key, value in kwargs.items():
             f.create_dataset(key, data=value)
-
-
-if __name__ == "__main__":
-    print()

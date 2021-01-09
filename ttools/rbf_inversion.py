@@ -21,21 +21,6 @@ from scipy.interpolate import interp2d
 from ttools import utils, trough_model
 
 
-def get_datetime64_year_month(datetime):
-    year = datetime.astype('datetime64[Y]').astype(int) + 1970
-    month = datetime.astype('datetime64[M]').astype(int) % 12 + 1
-    return year, month
-
-
-def get_tec_maps(year, month, base_dir="E:\\tec_data"):
-    fn = os.path.join(base_dir, f"{year:04d}_{month:02d}_tec.h5")
-    with h5py.File(fn, 'r') as f:
-        tec = f['tec'][()]
-        labels = f['labels'][()]
-        start_time = f['start_time'][()]
-    return tec, labels, start_time
-
-
 def polar_pad(x, padding):
     if x.ndim == 3:
         top_pad = x[0] * np.ones((padding[0], 1, 1))
@@ -68,25 +53,6 @@ def estimate_background(x, patch_size):
         patch_size += 1
     patches = extract_patches(x, patch_size)
     return bn.nanmean(patches, axis=-1)
-
-
-def get_tec_map_interval(year, month, index, time_radius=2):
-    day = index // 24 + 1
-    hour = index % 24
-    tec_time = np.datetime64(f"{year:04d}-{month:02d}-{day:02d}T{hour:02d}:00:00")
-    start_time = tec_time - np.timedelta64(time_radius, 'h')
-    start_ut = utils.datetime64_to_timestamp(start_time)
-    start_year, start_month = get_datetime64_year_month(start_time)
-    end_time = tec_time + np.timedelta64(time_radius + 1, 'h')
-    end_ut = utils.datetime64_to_timestamp(end_time)
-    end_year, end_month = get_datetime64_year_month(end_time)
-    tec, _, ut = get_tec_maps(start_year, start_month)
-    if (start_year, start_month) != (end_year, end_month):
-        tec2, _, ut2 = get_tec_maps(end_year, end_month)
-        ut = np.concatenate((ut, ut2))
-        tec = np.concatenate((tec, tec2), axis=-1)
-    sl = slice(np.argmax(ut >= start_ut), np.argmax(ut > end_ut))
-    return ut[sl], tec[:, :, sl]
 
 
 def preprocess_tec_interval(tec, ma_width=19):

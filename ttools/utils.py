@@ -1,5 +1,6 @@
 import numpy as np
 import datetime
+import os
 
 
 def datetime64_to_timestamp(dt64):
@@ -29,21 +30,7 @@ def datetime64_to_datetime(dt64):
     """
     ts = datetime64_to_timestamp(dt64)
     if isinstance(ts, np.ndarray):
-        return [timestamp_to_datetime(t) for t in ts]
-    return timestamp_to_datetime(ts)
-
-
-def timestamp_to_datetime(ts):
-    """Convert timestamp (seconds since epoch) to datetime
-
-    Parameters
-    ----------
-    ts: float
-
-    Returns
-    -------
-    datetime
-    """
+        return [datetime.datetime.utcfromtimestamp(t) for t in ts]
     return datetime.datetime.utcfromtimestamp(ts)
 
 
@@ -140,3 +127,31 @@ def get_random_map_id(start_time=np.datetime64("2013-12-03T00:00:00"), end_time=
     month = map_time.astype('datetime64[M]').astype(int) % 12 + 1
     index = (map_time.astype('datetime64[h]') - map_time.astype('datetime64[M]')).astype(int)
     return year, month, index
+
+
+def no_ext_fn(fn):
+    """return name of file with no path or extension
+
+    Parameters
+    ----------
+    fn: str
+
+    Returns
+    -------
+    str
+    """
+    return os.path.splitext(os.path.basename(fn))[0]
+
+
+def centered_bn_func(func, arr, window_diameter, pad=False, **kwargs):
+    window_radius = window_diameter // 2
+    if pad:
+        arr = np.pad(arr, window_radius, mode='edge')
+    return func(arr, window_diameter, **kwargs)[2 * window_radius:]
+
+
+def moving_func_trim(window_diameter, *arrays):
+    window_radius = window_diameter // 2
+    if len(arrays) == 1 and isinstance(arrays[0], dict):
+        return {k: v[window_radius:-window_radius] for k, v in arrays[0].items()}
+    return (array[window_radius:-window_radius] for array in arrays)

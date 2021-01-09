@@ -1,8 +1,6 @@
 import apexpy
 import numpy as np
 
-from ttools import utils
-
 
 def geo_to_mlt_grid(lat, lon, times, converter=None, height=0, ssheight=50*6371):
     """Convert a grid of geographic coordinates at different times to MLAT / MLT coordinates.
@@ -55,6 +53,17 @@ def geo_to_mlt(glat, glon, height, times, converter=None, ssheight=50*6371):
     ssmlat, ssmlon = converter.geo2apex(ssglat, ssglon, ssheight)
     mlt = (180 + mlon - ssmlon) / 15 % 24
     return mlat, mlt
+
+
+def mlon_to_mlt_array(mlon, times, converter=None, ssheight=50*6371):
+    if times.dtype is not np.dtype('datetime64[s]'):
+        times = times.astype('datetime64[s]')
+    if converter is None:
+        converter = apexpy.Apex()
+    ssglat, ssglon = subsol_array(times)
+    ssmlat, ssmlon = converter.geo2apex(ssglat, ssglon, ssheight)
+    mlt = (180 + mlon - ssmlon) / 15 % 24
+    return mlt
 
 
 def subsol_array(times):

@@ -1,7 +1,8 @@
 import numpy as np
 import os
+import apexpy
 
-from ttools import io, config
+from ttools import io, config, utils
 
 
 def test_get_madrigal_data(madrigal_data_dir):
@@ -46,15 +47,22 @@ def test_get_madrigal_missing(madrigal_data_dir):
 def test_get_swarm_data(swarm_data_dir):
     start_date = np.datetime64("2019-12-26T10:10:10.001")
     end_date = np.datetime64("2019-12-26T10:30:01.000")
-    data, times = io.get_swarm_data(start_date, end_date, 'C', dir=swarm_data_dir)
+    data, times = io.get_swarm_data(start_date, end_date, 'C', data_dir=swarm_data_dir, coords_dir=swarm_data_dir)
     correct_times = np.arange(np.datetime64("2019-12-26T10:10:10.5"), end_date + 1, np.timedelta64(500, 'ms'))
     assert np.all(times == correct_times)
+
+    converter = apexpy.Apex(utils.datetime64_to_datetime(times[0]))
+    fin_mask = np.isfinite(data['n'])
+    apex_lat, apex_lon = converter.convert(data['Latitude'][fin_mask], data['Longitude'][fin_mask], 'geo', 'apex',
+                                           data['Height'][fin_mask])
+    assert np.allclose(apex_lat, data['apex_lat'][fin_mask])
+    assert np.allclose(apex_lon, data['apex_lon'][fin_mask])
 
 
 def test_get_swarm_fill(swarm_data_dir):
     start_date = np.datetime64("2019-12-26T22:22:22.001")
     end_date = np.datetime64("2019-12-27T02:00:00.000")
-    data, times = io.get_swarm_data(start_date, end_date, 'C', dir=swarm_data_dir)
+    data, times = io.get_swarm_data(start_date, end_date, 'C', data_dir=swarm_data_dir, coords_dir=swarm_data_dir)
     correct_times = np.arange(np.datetime64("2019-12-26T22:22:22.5"), end_date + 1, np.timedelta64(500, 'ms'))
     no_data_time = np.datetime64("2019-12-27T00:00:00.000")
     assert np.all(times == correct_times)
