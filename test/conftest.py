@@ -8,6 +8,11 @@ def madrigal_data_dir():
 
 
 @pytest.fixture
+def tec_data_dir():
+    yield os.path.join(os.path.dirname(__file__), 'test_tec_data')
+
+
+@pytest.fixture
 def swarm_data_dir():
     yield os.path.join(os.path.dirname(__file__), 'test_swarm_data')
 

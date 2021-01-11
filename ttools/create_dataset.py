@@ -7,7 +7,7 @@ from multiprocessing import Pool
 from ttools import io, config, convert, utils
 
 
-def assemble_binning_args(mlat, mlt, tec, times, bins, map_period):
+def assemble_binning_args(mlat, mlt, tec, times, ssmlon, bins, map_period):
     """Creates a list of tuple arguments to be passed to `calculate_bins`. `calculate_bins` is called by the process
     pool manager using each tuple in the list returned by this function as arguments. Each set of arguments corresponds
     to one processed TEC map and should span a time period specified by `map_period`. `map_period` should evenly divide
@@ -15,10 +15,7 @@ def assemble_binning_args(mlat, mlt, tec, times, bins, map_period):
 
     Parameters
     ----------
-    mlat: numpy.ndarray[float]
-    mlt: numpy.ndarray[float]
-    tec: numpy.ndarray[float]
-    times: numpy.ndarray[float]
+    mlat, mlt, tec, times, ssmlon: numpy.ndarray[float]
     bins: list[numpy.ndarray[float]]
     map_period: {np.timedelta64, int}
 
@@ -31,7 +28,7 @@ def assemble_binning_args(mlat, mlt, tec, times, bins, map_period):
         map_period = map_period.astype('timedelta64[s]').astype(int)
     args = []
     current_time = times[0]
-    while current_time <= times[-1]:
+    while current_time < times[-1]:
         start = np.argmax(times >= current_time)
         end = np.argmax(times >= current_time + map_period)
         if end == 0:
@@ -41,20 +38,17 @@ def assemble_binning_args(mlat, mlt, tec, times, bins, map_period):
         mlat_r = mlat[time_slice][fin_mask].copy()
         mlt_r = mlt[time_slice][fin_mask].copy()
         tec_r = tec[time_slice][fin_mask].copy()
-        args.append((mlat_r, mlt_r, tec_r, times[time_slice], bins))
+        args.append((mlat_r, mlt_r, tec_r, times[time_slice], ssmlon[time_slice], bins))
         current_time += map_period
     return args
 
 
-def calculate_bins(mlat, mlt, tec, times, bins):
+def calculate_bins(mlat, mlt, tec, times, ssmlon, bins):
     """Calculates TEC in MLAT - MLT bins. Executed in process pool.
 
     Parameters
     ----------
-    mlat: numpy.ndarray[float] (N, )
-    mlt: numpy.ndarray[float] (N, )
-    tec: numpy.ndarray[float] (N, )
-    times: numpy.ndarray[float] (T, )
+    mlat, mlt, tec, times, ssmlon: numpy.ndarray[float] (N, )
     bins: list[numpy.ndarray[float] (X + 1, ), numpy.ndarray[float] (Y + 1, )]
 
     Returns
@@ -72,7 +66,7 @@ def calculate_bins(mlat, mlt, tec, times, bins):
         final_tec = binned_statistic_2d(mlat, mlt, tec, 'mean', bins).statistic
         final_tec_n = binned_statistic_2d(mlat, mlt, tec, 'count', bins).statistic
         final_tec_s = binned_statistic_2d(mlat, mlt, tec, 'std', bins).statistic
-    return times[0], final_tec, final_tec_n, final_tec_s
+    return times[0], final_tec, ssmlon[0], final_tec_n, final_tec_s
 
 
 def process_month(start_date, mlat_grid, mlon_grid, converter, bins, map_period=np.timedelta64(1, 'h'),
@@ -83,8 +77,7 @@ def process_month(start_date, mlat_grid, mlon_grid, converter, bins, map_period=
     Parameters
     ----------
     start_date: np.datetime64
-    mlat_grid: numpy.ndarray[float] (X, Y)
-    mlon_grid: numpy.ndarray[float] (X, Y)
+    mlat_grid, mlon_grid: numpy.ndarray[float] (X, Y)
     converter: apexpy.Apex
     bins: list[numpy.ndarray[float] (X + 1, ), numpy.ndarray[float] (Y + 1, )]
     map_period: {np.timedelta64, int}
@@ -103,18 +96,21 @@ def process_month(start_date, mlat_grid, mlon_grid, converter, bins, map_period=
         start_date = start_date.astype('datetime64[M]')
     tec, ts = io.get_madrigal_data(start_date, start_date + 1, dir=madrigal_dir)
     print("Converting coordinates")
-    mlat, mlt, ssmlon = convert.mlon_to_mlt_grid(mlat_grid, mlon_grid, ts, converter)
+    mlt, ssmlon = convert.mlon_to_mlt_array(mlon_grid[None, :, :], ts[:, None, None], converter, return_ssmlon=True)
+    mlat = mlat_grid[None, :, :] * np.ones((ts.shape[0], 1, 1), dtype=float)
+    mlt[mlt > 12] -= 24
     print("Setting up for binning")
-    args = assemble_binning_args(mlat, mlt, tec, ts, bins, map_period)
+    args = assemble_binning_args(mlat, mlt, tec, ts, ssmlon, bins, map_period)
     print(f"Calculating bins for {len(args)} time steps")
     with Pool(processes=8) as p:
         pool_result = p.starmap(calculate_bins, args)
     print("Calculated bins")
     times = np.array([r[0] for r in pool_result])
     tec = np.array([r[1] for r in pool_result])
-    n = np.array([r[2] for r in pool_result])
-    std = np.array([r[3] for r in pool_result])
-    return times, tec, n, std, ssmlon
+    ssmlon = np.array([r[2] for r in pool_result])
+    n = np.array([r[3] for r in pool_result])
+    std = np.array([r[4] for r in pool_result])
+    return times, tec, ssmlon, n, std
 
 
 def get_mag_grid(ref_lat, ref_lon, converter):
@@ -144,7 +140,7 @@ def process_year(start_date, ref_lat, ref_lon, bins):
     mlat, mlon = get_mag_grid(ref_lat, ref_lon, converter)
     months = np.arange(start_date, start_date + 1, np.timedelta64(1, 'M'))
     for month in months:
-        times, tec, n, std, ssmlon = process_month(month, mlat, mlon, converter, bins)
+        times, tec, ssmlon, n, std = process_month(month, mlat, mlon, converter, bins)
         if np.isfinite(tec).any():
             ymd = utils.decompose_datetime64(month)
             fn = config.tec_file_pattern.format(year=ymd[0, 0], month=ymd[0, 1])
@@ -179,8 +175,8 @@ def process_dataset(start_year, end_year, mlat_bins, mlt_bins):
 
 if __name__ == "__main__":
     import sys
-    start_year = "2010"
-    end_year = "2021"
+    start_year = "2012"
+    end_year = "2013"
     if len(sys.argv) > 1:
         start_year = sys.argv[1]
         end_year = sys.argv[2]

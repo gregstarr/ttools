@@ -32,18 +32,26 @@ def test_mlon_to_mlt():
         assert true_mlt == mlt[i]
 
 
-def test_geo_to_mlt_grid():
+def test_geo_to_mlt_array():
     lat = np.arange(10) + 30
     lon = np.arange(10) + 30
-    lon_grid, lat_grid = np.meshgrid(lon, lat)
     times = np.datetime64("2012-10-10T10:10:10") + np.arange(10) * np.timedelta64(1, 'h')
-    mlat, mlt = convert.geo_to_mlt_grid(lat, lon, times, height=100)
-
+    mlat, mlt = convert.geo_to_mlt_array(lat[None, :, None], lon[None, None, :], 100, times[:, None, None])
+    mlat = mlat * np.ones_like(mlt)
     converter = apexpy.Apex()
     for i, t in enumerate(times):
-        true_mlat, true_mlt = converter.convert(lat_grid.ravel(), lon_grid.ravel(), 'geo', 'mlt', height=100,
+        true_mlat, true_mlt = converter.convert(lat[:, None], lon[None, :], 'geo', 'mlt', height=100,
                                                datetime=utils.datetime64_to_datetime(t))
-        true_mlat = true_mlat.reshape(lat_grid.shape)
-        true_mlt = true_mlt.reshape(lat_grid.shape)
         assert np.allclose(mlat[i], true_mlat)
+        assert np.allclose(mlt[i], true_mlt)
+
+
+def test_mlon_to_mlt_array():
+    mlon = np.arange(10) + 30
+    times = np.datetime64("2012-10-10T10:10:10") + np.arange(10) * np.timedelta64(1, 'h')
+    converter = apexpy.Apex()
+    mlt, ssmlon = convert.mlon_to_mlt_array(mlon[None, :], times[:, None], converter, return_ssmlon=True)
+    assert ssmlon.shape[0] == times.shape[0]
+    for i, t in enumerate(times):
+        true_mlt = converter.mlon2mlt(mlon, utils.datetime64_to_datetime(t))
         assert np.allclose(mlt[i], true_mlt)

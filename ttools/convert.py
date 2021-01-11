@@ -2,60 +2,17 @@ import apexpy
 import numpy as np
 
 
-def geo_to_mlt_grid(lat, lon, times, converter=None, height=0, ssheight=50*6371):
-    """Convert a grid of geographic coordinates at different times to MLAT / MLT coordinates.
-
-    Parameters
-    ----------
-    lat: numpy.ndarray
-    lon: numpy.ndarray
-    times: numpy.ndarray
-            times as timestamp or datetime64
-    converter: apexpy.Apex (optional)
-    height: numeric
-    ssheight: numeric
-
-    Returns
-    -------
-    mlat, mlt: numpy.ndarray[float]
-    """
-    if times.dtype is not np.dtype('datetime64[s]'):
-        times = times.astype('datetime64[s]')
-    if converter is None:
-        converter = apexpy.Apex()
-    lon_grid, lat_grid = np.meshgrid(lon, lat)
-    mlat, mlon = converter.geo2apex(lat_grid.ravel(), lon_grid.ravel(), height)
-    mlat = mlat.reshape(lat_grid.shape)
-    mlon = mlon.reshape(lat_grid.shape)
-    mlat, mlt, ssmlon = mlon_to_mlt_grid(mlat, mlon, times, converter, ssheight)
-    return mlat, mlt
-
-
-def mlon_to_mlt_grid(mlat_grid, mlon_grid, times, converter=None, ssheight=50*6371):
-    if times.dtype is not np.dtype('datetime64[s]'):
-        times = times.astype('datetime64[s]')
-    if converter is None:
-        converter = apexpy.Apex()
-    ssglat, ssglon = subsol_array(times)
-    ssmlat, ssmlon = converter.geo2apex(ssglat, ssglon, ssheight)
-    mlt = (180 + mlon_grid[None, :, :] - ssmlon[:, None, None]) / 15 % 24
-    mlat = mlat_grid[None, :, :] * np.ones((times.shape[0], 1, 1), dtype=float)
-    return mlat, mlt, ssmlon
-
-
-def geo_to_mlt(glat, glon, height, times, converter=None, ssheight=50*6371):
+def geo_to_mlt_array(glat, glon, height, times, converter=None, ssheight=50*6371):
     if times.dtype is not np.dtype('datetime64[s]'):
         times = times.astype('datetime64[s]')
     if converter is None:
         converter = apexpy.Apex()
     mlat, mlon = converter.geo2apex(glat, glon, height)
-    ssglat, ssglon = subsol_array(times)
-    ssmlat, ssmlon = converter.geo2apex(ssglat, ssglon, ssheight)
-    mlt = (180 + mlon - ssmlon) / 15 % 24
+    mlt = mlon_to_mlt_array(mlon, times, converter)
     return mlat, mlt
 
 
-def mlon_to_mlt_array(mlon, times, converter=None, ssheight=50*6371):
+def mlon_to_mlt_array(mlon, times, converter=None, ssheight=50*6371, return_ssmlon=False):
     if times.dtype is not np.dtype('datetime64[s]'):
         times = times.astype('datetime64[s]')
     if converter is None:
@@ -63,7 +20,21 @@ def mlon_to_mlt_array(mlon, times, converter=None, ssheight=50*6371):
     ssglat, ssglon = subsol_array(times)
     ssmlat, ssmlon = converter.geo2apex(ssglat, ssglon, ssheight)
     mlt = (180 + mlon - ssmlon) / 15 % 24
+    if return_ssmlon:
+        return mlt, ssmlon
     return mlt
+
+
+def mlt_to_geo_array(mlat, mlt, times, height=0, converter=None, ssheight=50*6371):
+    if times.dtype is not np.dtype('datetime64[s]'):
+        times = times.astype('datetime64[s]')
+    if converter is None:
+        converter = apexpy.Apex()
+    ssglat, ssglon = subsol_array(times)
+    ssalat, ssalon = converter.geo2apex(ssglat, ssglon, ssheight)
+    mlon = (15 * mlt - 180 + ssalon + 360) % 360
+    glat, glon, _ = converter.apex2geo(mlat, mlon, height)
+    return glat, glon
 
 
 def subsol_array(times):
@@ -84,7 +55,7 @@ def subsol_array(times):
     day_floor = times.astype('datetime64[D]')
     year = year_floor.astype(int) + 1970
     doy = (day_floor - year_floor).astype(int) + 1
-    sec = (times.astype('datetime64[s]') - day_floor).astype(float)
+    ut = (times.astype('datetime64[s]') - day_floor).astype(float)
 
     if not np.all(1601 <= year) and np.all(year <= 2100):
         raise ValueError('Year must be in [1601, 2100]')
@@ -102,7 +73,7 @@ def subsol_array(times):
     l0 = -79.549 + (-0.238699 * (yr - 4.0 * nleap) + 3.08514e-2 * nleap)
     g0 = -2.472 + (-0.2558905 * (yr - 4.0 * nleap) - 3.79617e-2 * nleap)
     # Days (including fraction) since 12 UT on January 1 of IYR:
-    df = (sec / 86400.0 - 1.5) + doy
+    df = (ut / 86400.0 - 1.5) + doy
     # Mean longitude of Sun:
     lmean = l0 + 0.9856474 * df
     # Mean anomaly in radians:
@@ -121,7 +92,7 @@ def subsol_array(times):
     nrot = np.round(etdeg / 360.0)
     etdeg = etdeg - 360.0 * nrot
     # Subsolar longitude:
-    sslon = 180.0 - (sec / 240.0 + etdeg)  # Earth rotates one degree every 240 s.
+    sslon = 180.0 - (ut / 240.0 + etdeg)  # Earth rotates one degree every 240 s.
     nrot = np.round(sslon / 360.0)
     sslon = sslon - 360.0 * nrot
     return sslat, sslon

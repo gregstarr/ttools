@@ -91,8 +91,6 @@ ALL_SWARM_FIELDS = (
 
 
 SWARM_FIELDS_LESS_MAG_COORDS = (
-    'Latitude',
-    'Longitude',
     'Height',
     'Radius',
     'SZA',
@@ -192,8 +190,7 @@ def get_madrigal_data(start_date, end_date, dir=config.madrigal_dir):
 
     Parameters
     ----------
-    start_date: np.datetime64
-    end_date: np.datetime64
+    start_date, end_date: np.datetime64
     dir: str
 
     Returns
@@ -203,8 +200,8 @@ def get_madrigal_data(start_date, end_date, dir=config.madrigal_dir):
     dt = np.timedelta64(5, 'm')
     dt_sec = dt.astype('timedelta64[s]').astype(int)
     start_date = (np.ceil(start_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
-    end_date = (np.floor(end_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
-    ref_times = np.arange(start_date, end_date + dt, dt)
+    end_date = (np.ceil(end_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
+    ref_times = np.arange(start_date, end_date, dt)
     ref_times_ut = ref_times.astype('datetime64[s]').astype(int)
     tec = np.ones((config.madrigal_lat.shape[0], config.madrigal_lon.shape[0], ref_times_ut.shape[0])) * np.nan
     file_dates = np.unique(ref_times.astype('datetime64[D]'))
@@ -222,10 +219,7 @@ def get_madrigal_data(start_date, end_date, dir=config.madrigal_dir):
         month_time_mask = np.in1d(ref_times_ut, ut)
         day_time_mask = np.in1d(ut, ref_times_ut)
         if not (np.all(lat == config.madrigal_lat) and np.all(lon == config.madrigal_lon)):
-            print("THIS FILE HAS MISSING DATA!!!!!!!")
-            print("THIS FILE HAS MISSING DATA!!!!!!!")
-            print("THIS FILE HAS MISSING DATA!!!!!!!")
-            print(fn)
+            print(f"THIS FILE HAS MISSING DATA!!!!!!! {fn}")
             lat_ind = np.argwhere(np.in1d(config.madrigal_lat, lat))[:, 0]
             lon_ind = np.argwhere(np.in1d(config.madrigal_lon, lon))[:, 0]
             time_ind = np.argwhere(month_time_mask)[:, 0]
@@ -261,6 +255,18 @@ def open_madrigal_file(fn):
 
 
 def get_swarm_data(start_date, end_date, sat, data_dir=config.swarm_dir, coords_dir=config.swarm_coords_dir):
+    """Gets madrigal TEC and timestamps assuming regular sampling. Fills in missing time steps with NaNs.
+
+    Parameters
+    ----------
+    start_date, end_date: numpy.datetime64
+    sat, data_dir, coords_dir: str
+
+    Returns
+    -------
+    data: dict
+    ref_times: numpy.ndarray[datetime64]
+    """
     if coords_dir is not None:
         fields = SWARM_FIELDS_LESS_MAG_COORDS + SWARM_NEW_COORDS
     else:
@@ -269,8 +275,8 @@ def get_swarm_data(start_date, end_date, sat, data_dir=config.swarm_dir, coords_
     dt = np.timedelta64(500, 'ms')
     dt_sec = dt.astype('timedelta64[ms]').astype(float)
     start_date = (np.ceil(start_date.astype('datetime64[ms]').astype(float) / dt_sec) * dt_sec).astype('datetime64[ms]')
-    end_date = (np.floor(end_date.astype('datetime64[ms]').astype(float) / dt_sec) * dt_sec).astype('datetime64[ms]')
-    ref_times = np.arange(start_date, end_date + dt, dt)
+    end_date = (np.ceil(end_date.astype('datetime64[ms]').astype(float) / dt_sec) * dt_sec).astype('datetime64[ms]')
+    ref_times = np.arange(start_date, end_date, dt)
     ref_times_ut = ref_times.astype('datetime64[ms]').astype(float)
     data = {f: np.ones(ref_times.shape[0]) * np.nan for f in fields}
     file_dates = np.unique(ref_times.astype('datetime64[D]'))
@@ -297,6 +303,16 @@ def get_swarm_data(start_date, end_date, sat, data_dir=config.swarm_dir, coords_
 
 
 def filter_swarm_files(files):
+    """given a list of SWARM filenames, returns a list only including the latest version of each file
+
+    Parameters
+    ----------
+    files: list[str]
+
+    Returns
+    -------
+    list[str]
+    """
     result = []
     base = [(os.path.split(fn)[0], utils.no_ext_fn(fn)) for fn in files]
     splitup = [(b[:-4], b[-4:], a) for a, b in base]
@@ -308,7 +324,7 @@ def filter_swarm_files(files):
 
 
 def open_swarm_file(fn):
-    """Opens a SWARM file (extended plasma dataset)
+    """Opens a SWARM file
 
     Parameters
     ----------
@@ -368,6 +384,66 @@ def open_swarm_coords_file(fn):
         coords['lon'] = f['lon'][()]
     print(f"Opened swarm coords file: {fn}, size: {coords['apex_lat'].shape}")
     return coords
+
+
+def get_tec_data(start_date, end_date, dir=config.tec_dir):
+    """Gets TEC and timestamps
+
+    Parameters
+    ----------
+    start_date, end_date: np.datetime64
+    dir: str
+
+    Returns
+    -------
+    tec, times: numpy.ndarray
+    """
+    dt = np.timedelta64(1, 'h')
+    dt_sec = dt.astype('timedelta64[s]').astype(int)
+    start_date = (np.ceil(start_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
+    end_date = (np.ceil(end_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
+    ref_times = np.arange(start_date, end_date, dt)
+    ref_times_ut = ref_times.astype('datetime64[s]').astype(int)
+    tec = []
+    ssmlon = []
+    n_samples = []
+    file_dates = np.unique(ref_times.astype('datetime64[M]'))
+    file_dates = utils.decompose_datetime64(file_dates)
+    for i in range(file_dates.shape[0]):
+        y = file_dates[i, 0]
+        m = file_dates[i, 1]
+        try:
+            fn = os.path.join(dir, config.tec_file_pattern.format(year=y, month=m))
+        except IndexError:
+            print(f"{y}-{m} TEC file doesn't exist")
+            continue
+        t, ut, ss, n, std = open_tec_file(fn)
+        in_time_mask = np.in1d(ut, ref_times_ut)
+        tec.append(t[in_time_mask])
+        ssmlon.append(ss[in_time_mask])
+        n_samples.append(n[in_time_mask])
+    return np.concatenate(tec, axis=0), ref_times, np.concatenate(ssmlon), np.concatenate(n_samples)
+
+
+def open_tec_file(fn):
+    """Open a monthly TEC file, return its data
+
+    Parameters
+    ----------
+    fn: str
+
+    Returns
+    -------
+    tec, times, ssmlon, n, std: numpy.ndarray
+    """
+    with h5py.File(fn, 'r') as f:
+        tec = f['tec'][()]
+        n = f['n'][()]
+        times = f['times'][()]
+        std = f['std'][()]
+        ssmlon = f['ssmlon'][()]
+    print(f"Opened TEC file: {fn}, size: {tec.shape}")
+    return tec, times, ssmlon, n, std
 
 
 def write_file(fn, **kwargs):

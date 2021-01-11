@@ -3,53 +3,34 @@ import apexpy
 from scipy.interpolate import interp1d
 import datetime
 
-from ttools.io import get_gm_index_kyoto
+from ttools import io, convert
 
 
-def get_model(ut, mlt):
+def get_model(ut, mlt_vals):
     """Get magnetic latitudes of the trough according to the model in Deminov 2017
     for a specific time and set of magnetic local times.
 
     Parameters
     ----------
-    ut: int
-        unix timestamp
-    mlt: numpy.ndarray (n, )
-        magnetic local times to evaluate model at
+    ut, mlt: numpy.ndarray
     Returns
     -------
-    mlat: numpy.ndarray (n, )
+    mlat: numpy.ndarray (n_ut, n_mlt)
         model evaluated at the given magnetic local times
     """
+    if np.issubdtype(ut.dtype, np.datetime64):
+        ut = ut.copy().astype('datetime64[s]').astype(int)
     kp = _get_weighted_kp(ut)
-    converter = apexpy.Apex(date=datetime.datetime.fromtimestamp(ut))
-    lat = 65.5 * np.ones_like(mlt)
+    converter = apexpy.Apex(date=datetime.datetime.fromtimestamp(ut[0]))
+    mlat = 65.5 * np.ones((ut.shape[0], mlt_vals.shape[0]))
     for i in range(10):
-        lon = _model_subroutine_lon(mlt, lat, ut, converter)
-        lat = _model_subroutine_lat(mlt, lon, kp)
-    return lat
-
-
-def _model_subroutine_lon(mlt, mlat, ut, converter):
-    """
-
-    Parameters
-    ----------
-    mlt: numpy.ndarray (n_mlt, )
-    mlat: numpy.ndarray (n_mlt, )
-    ut: int
-    converter: apexpy.Apex
-
-    Returns
-    -------
-    glon: numpy.ndarray (n_mlt, )
-    """
-    lat, lon = converter.convert(mlat, mlt, 'mlt', 'geo', 350, datetime=datetime.datetime.fromtimestamp(ut))
-    return lon
+        glat, glon = convert.mlt_to_geo_array(mlat, mlt_vals[None, :], ut[:, None], 350, converter)
+        mlat = _model_subroutine_lat(mlt_vals[None, :], glon, kp[:, None])
+    return mlat
 
 
 def _model_subroutine_lat(mlt, glon, kp):
-    """
+    """Get's model output mlat given MLT, geographic lon and weighted kp
 
     Parameters
     ----------
@@ -84,7 +65,7 @@ def _get_weighted_kp(ut, fn="E:\\2000_2020_kp_ap.txt", tau=.6, T=10):
     -------
     weighted kp: float
     """
-    df = get_gm_index_kyoto(fn)
+    df = io.get_gm_index_kyoto(fn)
     ap = df['ap'].values
     times = np.array(df['ap'].index.values.astype(float) / 1e9, dtype=int)
     prehistory = np.column_stack([ap[T - i - 1:ap.shape[0] - i] for i in range(T)])

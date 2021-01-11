@@ -1,73 +1,116 @@
 """
 steps:
+    - get data interval
     - preprocess
+        - log, background estimation, downsampling
     - setup and run optimization problem
     - threshold at 1
+
+Example:
+```
+# load data
+tec, times, ssmlon, n = io.get_tec_data(start_time, end_time)
+# preprocess
+x, times = rbf_inversion.preprocess_interval(tec, times)
+# setup optimization
+args = rbf_inversion.get_optimization_args(x, times)
+# run optimization
+model_output = rbf_inversion.run_multiple(args)
+# threshold
+initial_trough = model_output >= 1
+# postprocess
+trough = rbf_inversion.postprocess(initial_trough)
+```
 """
 import numpy as np
-import h5py
-import os
 import bottleneck as bn
 import cvxpy as cp
 import warnings
 import pandas
+import multiprocessing
 
 from skimage.util import view_as_windows
-from skimage import morphology, measure
+from skimage import measure
 from sklearn.metrics.pairwise import rbf_kernel
 from scipy.sparse import csr_matrix
-from scipy.interpolate import interp2d
 
-from ttools import utils, trough_model
-
-
-def polar_pad(x, padding):
-    if x.ndim == 3:
-        top_pad = x[0] * np.ones((padding[0], 1, 1))
-        pad_args = (0, 0), (padding[1], padding[1]), (0, 0)
-    else:
-        top_pad = x[0] * np.ones((padding[0], 1))
-        pad_args = (0, 0), (padding[1], padding[1])
-    padded = np.concatenate((top_pad, x, np.roll(x[-1:-padding[0] - 1:-1], 180, axis=1)), axis=0)
-    return np.pad(padded, pad_args, mode='wrap')
+from ttools import utils, trough_model, config
 
 
-def extract_patches(x, patch_size):
-    pad_size = (patch_size - 1) // 2
-    if x.ndim == 3:
-        top_pad = x[0] * np.ones((pad_size, 1, 1))
-        pad_args = (0, 0), (pad_size, pad_size), (0, 0)
-        patch_shape = (patch_size, patch_size, x.shape[-1])
-    else:
-        top_pad = x[0] * np.ones((pad_size, 1))
-        pad_args = (0, 0), (pad_size, pad_size)
-        patch_shape = (patch_size, patch_size)
-    padded = np.concatenate((top_pad, x, np.roll(x[-1:-pad_size - 1:-1], 180, axis=1)), axis=0)
-    padded = np.pad(padded, pad_args, mode='wrap')
-    patches = view_as_windows(padded, patch_shape)
-    return patches.reshape(x.shape[:2] + (-1,))
+DEFAULT_PARAMS = {
+    'tv_weight': .06,
+    'l2_weight': .05,
+    'bge_spatial_size': 17,
+    'bge_temporal_rad': 1,
+    'cos_mlat': True,
+    'rbf_bw': 1,
+    'tv_hw': 1,
+    'tv_vw': 1,
+    'model_weight_max': 10,
+    'perimeter_th': 50
+}
 
 
-def estimate_background(x, patch_size):
-    if not patch_size % 2:
-        patch_size += 1
-    patches = extract_patches(x, patch_size)
-    return bn.nanmean(patches, axis=-1)
+def extract_patches(arr, patch_shape, step=1):
+    """Assuming `arr` is 3D (time, lat, lon). `arr` will be padded, then have patches extracted using
+    `skimage.util.view_as_windows`. The padding will be "edge" for lat, and "wrap" for lon, with no padding for
+    time. Returned array will have same lat and lon dimension length as input and a different time dimension length
+    depending on `patch_shape`.
+
+    Parameters
+    ----------
+    arr: numpy.ndarray
+        must be 3 dimensional
+    patch_shape: tuple
+        must be length 3
+    step: int
+    Returns
+    -------
+    patches view of padded array
+        shape (arr.shape[0] - patch_shape[0] + 1, arr.shape[1], arr.shape[2]) + patch_shape
+    """
+    assert arr.ndim == 3 and len(patch_shape) == 3, "Invalid input args"
+    # lat padding
+    padded = np.pad(arr, ((0, 0), (patch_shape[1] // 2, patch_shape[1] // 2), (0, 0)), 'edge')
+    # lon padding
+    padded = np.pad(padded, ((0, 0), (0, 0), (patch_shape[2] // 2, patch_shape[2] // 2)), 'wrap')
+    patches = view_as_windows(padded, patch_shape, step)
+    return patches
 
 
-def preprocess_tec_interval(tec, ma_width=19):
-    # get the middle tec map
-    idx = tec.shape[-1] // 2
+def estimate_background(tec, patch_shape):
+    """
+
+    Parameters
+    ----------
+    tec
+    patch_shape
+
+    Returns
+    -------
+
+    """
+    patches = extract_patches(tec, patch_shape)
+    return bn.nanmean(patches.reshape((tec.shape[0] - patch_shape[0] + 1, ) + tec.shape[1:] + (-1, )), axis=-1)
+
+
+def preprocess_interval(tec, times, min_val=0, max_val=150, bg_est_shape=(3, 15, 15), ds=None, n_samples=None):
+    tec = tec.copy()
     # throw away outlier values
-    mask = np.isfinite(tec)
-    mask[mask] = tec[mask] > 150
-    tec[mask] = np.nan
+    tec[tec > max_val] = np.nan
+    tec[tec < min_val] = np.nan
     # change to log
-    logtec = np.log10(tec + .001)
+    log_tec = np.log10(tec + .001)
     # estimate background
-    bg = estimate_background(logtec, ma_width)
+    bg = estimate_background(log_tec, bg_est_shape)
     # subtract background
-    return logtec[:, :, idx] - bg
+    log_tec, t, = utils.moving_func_trim(bg_est_shape[0], log_tec, times)
+    x = log_tec - bg
+    # downsample
+    if ds is not None:
+        print(n_samples)
+        raise NotImplementedError
+    return x, t
 
 
 def get_rbf_matrix(shape, bandwidth=1):
@@ -104,103 +147,71 @@ def get_tv_matrix(im_shape, hw=1, vw=1):
     return csr_matrix(hw * (right + left) + vw * (up + down))
 
 
-def downsample_2d_array(arr, ds):
-    windows = view_as_windows(arr, ds, ds)
-    return bn.nanmean(windows.reshape(windows.shape[:2] + (-1, )), axis=-1)
+def get_optimization_args(x, times, mlt_vals=config.mlt_vals, mlat_grid=config.mlat_grid, model_weight_max=30,
+                          rbf_bw=1, tv_hw=1, tv_vw=1, l2_weight=.15, tv_weight=.06):
+    all_args = []
+    # get deminov model
+    ut = times.astype('datetime64[s]').astype(float)
+    model_mlat = trough_model.get_model(ut, mlt_vals)
+    # get rbf basis matrix
+    basis = get_rbf_matrix(x.shape[1:], rbf_bw)
+    # get tv matrix
+    tv = get_tv_matrix(x.shape[1:], tv_hw, tv_vw) * tv_weight
+    for i in range(times.shape[0]):
+        # l2 norm cost away from model
+        l2 = (mlat_grid - model_mlat[i, :]) ** 2
+        l2 /= (l2.max() / model_weight_max)
+        l2 += 1
+        l2 *= l2_weight
+        fin_mask = np.isfinite(x[i].ravel())
+        args = (cp.Variable(x.shape[1] * x.shape[2]), basis[fin_mask, :], x[i].ravel()[fin_mask], tv, l2.ravel(),
+                times[i], mlat_grid.shape)
+        all_args.append(args)
+    return all_args
 
 
-DEFAULT_PARAMS = {
-    'tv_weight': .06,
-    'l2_weight': .05,
-    'bge_spatial_size': 17,
-    'bge_temporal_rad': 1,
-    'cos_mlat': True,
-    'rbf_bw': 1,
-    'tv_hw': 1,
-    'tv_vw': 1,
-    'model_weight_max': 10,
-    'perimeter_th': 50
-}
+def run_single(u, basis, x, tv, l2, t, output_shape):
+    print(t)
+    main_cost = u.T @ basis.T @ x
+    tv_cost = cp.norm1(tv @ u)
+    l2_cost = l2 @ (u ** 2)
+    total_cost = main_cost + tv_cost + l2_cost
+    prob = cp.Problem(cp.Minimize(total_cost), [u >= 0])
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+        prob.solve(solver=cp.SCS, max_iters=2000)
+    return u.value.reshape(output_shape)
 
 
-class RbfIversion:
+def run_multiple(args):
+    with multiprocessing.Pool(processes=8) as p:
+        results = p.starmap(run_single, args)
+    return np.stack(results, axis=0)
 
-    def __init__(self, mlt_grid, mlat_grid, ds=None, **params):
-        self.params = DEFAULT_PARAMS.copy()
-        self.params.update(**params)
-        self.ds = ds
-        if ds is not None:
-            self.mlt_grid = downsample_2d_array(mlt_grid, ds)
-            self.mlat_grid = downsample_2d_array(mlat_grid, ds)
-            self.output_mlt = mlt_grid[0]
-            self.output_mlat = mlat_grid[:, 0]
-        else:
-            self.mlt_grid = mlt_grid
-            self.mlat_grid = mlat_grid
-            self.output_mlt = None
-            self.output_mlat = None
 
-        self.d = self.mlt_grid.size
-        self.shape = self.mlt_grid.shape
-        mlat = np.deg2rad(self.mlat_grid[:, 0])
-        if self.params['cos_mlat']:
-            mlat_cost_weight = np.cos(mlat)
-        else:
-            mlat_cost_weight = np.ones_like(mlat)
-        self.mlat_cost_weight = (mlat_cost_weight[:, None] * np.ones((1, self.shape[1]))).ravel()
+def fix_boundaries(labels):
+    fixed = labels.copy()
+    while True:
+        boundary_pairs = np.unique(fixed[:, [0, -1]], axis=0)
+        if np.all(boundary_pairs[:, 0] == boundary_pairs[:, 1]):
+            break
+        for i in range(boundary_pairs.shape[0]):
+            if np.any(boundary_pairs[i] == 0) or boundary_pairs[i, 0] == boundary_pairs[i, 1]:
+                continue
+            fixed[fixed == boundary_pairs[i, 1]] = boundary_pairs[i, 0]
+            break
+    return fixed
 
-        self.basis = get_rbf_matrix(self.shape, self.params['rbf_bw'])
-        self.tv = get_tv_matrix(self.shape, hw=self.params['tv_hw'], vw=self.params['tv_vw'])
 
-        self.tv_weight = cp.Parameter(nonneg=True)
-        self.tv_weight.value = self.params['tv_weight']
-        self.l2_weight = cp.Parameter(nonneg=True)
-        self.l2_weight.value = self.params['l2_weight']
-
-    def run(self, x, ut):
-        model = trough_model.get_model(ut, self.mlt_grid[0])
-        model_weight = (self.mlat_grid - model[None, :]) ** 2
-        model_weight = model_weight.ravel()
-        model_weight /= (model_weight.max() / self.params['model_weight_max'])
-        model_weight += 1
-
-        fin_mask = np.isfinite(x.ravel())
-        finx = x.ravel()[fin_mask]
-        u = cp.Variable(self.d)
-        main_cost = u.T @ self.basis[fin_mask, :].T @ cp.multiply(self.mlat_cost_weight[fin_mask], finx)
-        tv_cost = self.tv_weight * cp.norm1(self.tv @ u)
-        l2_cost = self.l2_weight * model_weight @ (u ** 2)
-        total_cost = main_cost + tv_cost + l2_cost
-        prob = cp.Problem(cp.Minimize(total_cost), [u >= 0])
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore', UserWarning)
-            prob.solve(solver=cp.SCS, max_iters=2000)
-        return u.value
-
-    @staticmethod
-    def decision(u):
-        return u >= 1
-
-    def postprocess_labels(self, u, wrap=10):
-        if u.sum() == 0:
-            return u
-        padded = np.pad(u, ((0, 0), (wrap, wrap)), mode='wrap')
-        labeled = measure.label(padded, connectivity=2)
+def postprocess(initial_trough, perimeter_th=50, area_th=1):
+    trough = initial_trough.copy()
+    for t in range(trough.shape[0]):
+        tmap = trough[t]
+        labeled = measure.label(tmap, connectivity=2)
+        labeled = fix_boundaries(labeled)
         props = pandas.DataFrame(measure.regionprops_table(labeled, properties=('label', 'area', 'perimeter')))
-        labeled = labeled[:, wrap:-wrap]
-        for i, r in props[props['perimeter'] < self.params['perimeter_th']].iterrows():
-            u[labeled == r['label']] = 0
-        return u
-
-    def postprocess(self, u):
-        f = interp2d(self.mlt_grid[0], self.mlat_grid[:, 0], u.reshape(self.shape))
-        return f(self.output_mlt, self.output_mlat)
-
-    def load_and_preprocess(self, year, month, index):
-        ut, tec = get_tec_map_interval(year, month, index, time_radius=self.params['bge_temporal_rad'])
-        if ut.shape[0] < (2 * self.params['bge_temporal_rad'] + 1):
-            return None, None, None
-        ut = ut[ut.shape[0] // 2]
-        original = tec[:, :, tec.shape[-1] // 2]
-        x = preprocess_tec_interval(tec, self.params['bge_spatial_size'])
-        return downsample_2d_array(x, self.ds), ut, original
+        error_mask = (props['perimeter'] < perimeter_th) + (props['area'] < area_th)
+        for i, r in props[error_mask].iterrows():
+            tmap[labeled == r['label']] = 0
+        trough[t] = tmap
+    return trough
