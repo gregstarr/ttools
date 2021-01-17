@@ -21,9 +21,10 @@ with h5py.File(grid_file, 'r') as f:
     mlt_vals = f['mlt'][()]
     mlat_vals = f['mlat'][()]
 mlt_grid, mlat_grid = np.meshgrid(mlt_vals, mlat_vals)
-theta_vals = np.pi * (mlt_vals - 6) / 12
-radius_vals = 90 - mlat_vals
-theta_grid, radius_grid = np.meshgrid(theta_vals, radius_vals)
+
+
+# other settings
+PARALLEL = True
 
 
 if __name__ == "__main__":

@@ -144,7 +144,7 @@ def process_year(start_date, ref_lat, ref_lon, bins):
         if np.isfinite(tec).any():
             ymd = utils.decompose_datetime64(month)
             fn = config.tec_file_pattern.format(year=ymd[0, 0], month=ymd[0, 1])
-            io.write_file(fn, times=times.astype('datetime64[s]').astype(int), tec=tec, n=n, std=std, ssmlon=ssmlon)
+            io.write_h5(fn, times=times.astype('datetime64[s]').astype(int), tec=tec, n=n, std=std, ssmlon=ssmlon)
         else:
             print(f"No data for month: {month}, not writing file")
 
@@ -170,7 +170,7 @@ def process_dataset(start_year, end_year, mlat_bins, mlt_bins):
     tf = time.time()
     print((tf - t0) / 60)
     # make grid file
-    io.write_file(config.grid_file, mlt=mlt_vals, mlat=mlat_vals)
+    io.write_h5(config.grid_file, mlt=mlt_vals, mlat=mlat_vals)
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ import glob
 import h5py
 import pysatCDF
 import itertools
+import yaml
 
 from ttools import utils, config
 
@@ -446,7 +447,7 @@ def open_tec_file(fn):
     return tec, times, ssmlon, n, std
 
 
-def write_file(fn, **kwargs):
+def write_h5(fn, **kwargs):
     """Writes an h5 file with data specified by kwargs.
 
     Parameters
@@ -458,3 +459,8 @@ def write_file(fn, **kwargs):
     with h5py.File(fn, 'w') as f:
         for key, value in kwargs.items():
             f.create_dataset(key, data=value)
+
+
+def write_yaml(fn, **kwargs):
+    with open(fn, 'w') as f:
+        yaml.safe_dump(kwargs, f)

@@ -19,23 +19,24 @@ def format_polar_mag_ax(ax):
         ax.grid(True)
 
 
-def plot_swarm_trough_detection(ax, swarm_segment):
-    ax.plot(swarm_segment.data['MLat'], swarm_segment.data['smooth_dne'])
-    ax.plot(swarm_segment.data['MLat'], swarm_segment.data['dne'], 'k.', ms=1)
-    if swarm_segment.trough:
-        ax.plot([swarm_segment.pwall_lat, swarm_segment.ewall_lat], [0, 0], 'r', linestyle='solid', marker='|', ms=10)
-        ax.plot(swarm_segment.min_lat, swarm_segment.min_dne, 'rx')
+def plot_swarm_troughs_line(ax, mlat, dne, smooth_dne, trough):
+    ax.plot(mlat, smooth_dne)
+    ax.plot(mlat, dne, 'k.', ms=1)
+    if trough['trough']:
+        ax.plot(trough[['e1_mlat', 'e2_mlat']], [0, 0], 'r', linestyle='solid', marker='|', ms=10)
+        ax.plot(trough['min_mlat'], trough['min_dne'], 'rx')
 
 
-def plot_swarm_trough_detections_polar(ax, swarm_segments):
-    for segment in swarm_segments:
-        if segment.trough:
-            ax.plot((segment.data['MLT'][[segment.pwall_ind, segment.ewall_ind]] - 6) * np.pi / 12,
-                    [90 - segment.pwall_lat, 90 - segment.ewall_lat],
-                    'r-')
+def plot_swarm_troughs_polar(ax, troughs):
+    for i, trough in troughs.iterrows():
+        ax.plot((trough[['seg_e1_mlt', 'seg_e2_mlt']] - 6) * np.pi / 12,
+                90 - trough[['seg_e1_mlat', 'seg_e2_mlat']],
+                'k--')
+        if trough['trough']:
+            ax.plot((trough[['e1_mlt', 'e2_mlt']] - 6) * np.pi / 12, 90 - trough[['e1_mlat', 'e2_mlat']], 'r-')
 
 
 def polar_pcolormesh(ax, mlat, mlt, value, **kwargs):
     r = 90 - mlat
     t = (mlt - 6) * np.pi / 12
-    return ax.pcolormesh(t - np.pi/360, r + .5, value, **kwargs)
+    return ax.pcolormesh(t - np.pi/360, r + .5, value, shading='auto', **kwargs)

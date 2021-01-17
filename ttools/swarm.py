@@ -29,6 +29,7 @@ if trough:
 """
 import numpy as np
 import bottleneck as bn
+import pandas
 from scipy.signal import convolve2d
 from scipy.stats import binned_statistic_2d
 from scipy.interpolate import interp1d
@@ -100,6 +101,7 @@ def process_swarm_data_interval(data, times, median_window=3, mean_window=481):
     times, mlat, mlt = utils.moving_func_trim(median_window, times, data['apex_lat'], data['mlt'])  # trim
     background = utils.centered_bn_func(bn.move_mean, log_ne, mean_window, min_count=10)  # moving average
     times, log_ne, mlat, mlt = utils.moving_func_trim(mean_window, times, log_ne, mlat, mlt)  # trim
+    mlt[mlt > 12] -= 24
     return times, log_ne, background, mlat, mlt
 
 
@@ -128,8 +130,8 @@ def get_closest_segment(timestamp, mlat, tec_time, enter_lat, exit_lat=None):
             exit_mask = mlat < exit_lat
     starts, ends = get_region_bounds(enter_mask, exit_mask)
     centers = (starts + ends) // 2
-    best_center = np.argmin(abs(timestamp[centers] - tec_time))
-    return slice(starts[best_center], ends[best_center])
+    best_centers = np.argmin(abs(timestamp[None, centers] - tec_time[:, None]), axis=1)
+    return starts[best_centers], ends[best_centers]
 
 
 def get_region_bounds(enter_mask, exit_mask):
@@ -180,12 +182,13 @@ def find_troughs_in_segment(mlat, smooth_dne, threshold=-.2, width_min=1, width_
     -------
     trough:
         - if trough: min_idx, edge_1, edge_2
+        - if no trough: False
     """
     # fill NaNs
     fin_mask = np.isfinite(smooth_dne)
     smooth_dne_i = smooth_dne.copy()  # i for interpolated
     if not fin_mask.all():
-        interpolator = interp1d(mlat[fin_mask], smooth_dne[fin_mask], kind='previous')
+        interpolator = interp1d(mlat[fin_mask], smooth_dne[fin_mask], kind='previous', bounds_error=False, fill_value=0)
         smooth_dne_i[~fin_mask] = interpolator(mlat[~fin_mask])
     # find zero crossings
     zerox, = np.nonzero(np.diff(smooth_dne_i >= 0))
@@ -209,3 +212,73 @@ def find_troughs_in_segment(mlat, smooth_dne, threshold=-.2, width_min=1, width_
             # found a trough: return indices of min and walls
             return min_idx, edge_1, edge_2
     return False
+
+
+def unpack_trough(mlat, mlt, smooth_dne, trough):
+    if trough:
+        min_idx, e1_idx, e2_idx = trough
+        return True, mlat[min_idx], mlt[min_idx], smooth_dne[min_idx], mlat[e1_idx], mlt[e1_idx], mlat[e2_idx], mlt[e2_idx]
+    return False, 0, 0, 0, 0, 0, 0, 0
+
+
+def get_segments_data(tec_times):
+    """
+
+    Parameters
+    ----------
+    tec_times
+
+    Returns
+    -------
+    dict
+        {
+            sat: [
+                dict{
+                    times, mlat, mlt, dne, smooth_dne, direction, tec_time
+                }
+            ]
+        }
+    """
+    start_time = tec_times[0] - np.timedelta64(5, 'h')
+    end_time = tec_times[-1] + np.timedelta64(5, 'h')
+    DIRECTIONS = ['up', 'down']
+    ENTER_EXIT_TUPLES = [(45, 75), (75, 45)]
+    swarm_segments = {sat: {direction: [] for direction in DIRECTIONS} for sat in SWARM_SATELLITES}
+    for sat in SWARM_SATELLITES:
+        data, times = io.get_swarm_data(start_time, end_time, sat)
+        times, log_ne, background, mlat, mlt = process_swarm_data_interval(data, times)
+        dne = log_ne - background
+        smooth_dne = utils.centered_bn_func(bn.move_mean, dne, 10, pad=True, min_count=1)
+        fin_mask = np.isfinite(mlat)
+        for direction, (enter, exit) in zip(DIRECTIONS, ENTER_EXIT_TUPLES):
+            starts, stops = get_closest_segment(times[fin_mask], mlat[fin_mask], tec_times, enter, exit)
+            for i, (start, stop) in enumerate(zip(starts, stops)):
+                sl = slice(start, stop)
+                data = {
+                    'times': times[fin_mask][sl],
+                    'mlat': mlat[fin_mask][sl],
+                    'mlt': mlt[fin_mask][sl],
+                    'dne': dne[fin_mask][sl],
+                    'smooth_dne': smooth_dne[fin_mask][sl],
+                    'direction': direction,
+                    'tec_time': tec_times[i],
+                }
+                swarm_segments[sat][direction].append(data)
+    return swarm_segments
+
+
+def get_swarm_troughs(swarm_segments):
+    swarm_troughs = []
+    for sat, sat_segments in swarm_segments.items():
+        for direction, segments in sat_segments.items():
+            for i, segment in enumerate(segments):
+                trough = find_troughs_in_segment(segment['mlat'], segment['smooth_dne'])
+                trough_unpacked = unpack_trough(segment['mlat'], segment['mlt'], segment['smooth_dne'], trough)
+                seg_info = (sat, segment['mlat'][0], segment['mlt'][0], segment['mlat'][-1], segment['mlt'][-1], i)
+                data_row = trough_unpacked + seg_info
+                swarm_troughs.append(data_row)
+    swarm_troughs = pandas.DataFrame(data=swarm_troughs,
+                                     columns=['trough', 'min_mlat', 'min_mlt', 'min_dne', 'e1_mlat', 'e1_mlt',
+                                              'e2_mlat', 'e2_mlt', 'sat', 'seg_e1_mlat', 'seg_e1_mlt', 'seg_e2_mlat',
+                                              'seg_e2_mlt', 'tec_ind'])
+    return swarm_troughs

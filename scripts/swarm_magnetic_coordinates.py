@@ -18,5 +18,5 @@ for file in swarm_files:
     qd_lat, qd_lon = converter.convert(lat, lon, 'geo', 'qd', swarm_data['Height'])
     mlt = convert.mlon_to_mlt_array(apex_lon, swarm_data['Timestamp'], converter)
 
-    io.write_file(coords_fn, apex_lat=apex_lat, apex_lon=apex_lon, qd_lat=qd_lat, qd_lon=qd_lon, mlt=mlt, lat=lat,
+    io.write_h5(coords_fn, apex_lat=apex_lat, apex_lon=apex_lon, qd_lat=qd_lat, qd_lon=qd_lon, mlt=mlt, lat=lat,
                   lon=lon)

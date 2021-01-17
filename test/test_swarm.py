@@ -99,18 +99,20 @@ def test_get_closest_segment(swarm_data_dir):
     end_date = np.datetime64("2019-12-26T12:00:00.000")
     data, times = io.get_swarm_data(start_date, end_date, 'C', data_dir=swarm_data_dir, coords_dir=swarm_data_dir)
     fin_mask = np.isfinite(data['apex_lat'])
-    for tec_time in start_date + np.arange(6) * np.timedelta64(1, 'h'):
-        front = swarm.get_closest_segment(times[fin_mask], data['apex_lat'][fin_mask], tec_time, 45, 75)
-        assert np.all(data['apex_lat'][fin_mask][front] >= 45)
-        assert data['apex_lat'][fin_mask][front.start - 1] < 45
-        assert np.all(data['apex_lat'][fin_mask][front] < 75)
-        assert data['apex_lat'][fin_mask][front.stop] >= 75
+    tec_times = start_date + np.arange(6) * np.timedelta64(1, 'h')
+    starts, stops = swarm.get_closest_segment(times[fin_mask], data['apex_lat'][fin_mask], tec_times, 45, 75)
+    for start, stop in zip(starts, stops):
+        assert np.all(data['apex_lat'][fin_mask][start:stop] >= 45)
+        assert data['apex_lat'][fin_mask][start - 1] < 45
+        assert np.all(data['apex_lat'][fin_mask][start:stop] < 75)
+        assert data['apex_lat'][fin_mask][stop] >= 75
 
-        back = swarm.get_closest_segment(times[fin_mask], data['apex_lat'][fin_mask], tec_time, 75, 45)
-        assert np.all(data['apex_lat'][fin_mask][back] >= 45)
-        assert data['apex_lat'][fin_mask][back.start - 1] >= 75
-        assert np.all(data['apex_lat'][fin_mask][back] < 75)
-        assert data['apex_lat'][fin_mask][back.stop] < 45
+    starts, stops = swarm.get_closest_segment(times[fin_mask], data['apex_lat'][fin_mask], tec_times, 75, 45)
+    for start, stop in zip(starts, stops):
+        assert np.all(data['apex_lat'][fin_mask][start:stop] >= 45)
+        assert data['apex_lat'][fin_mask][start - 1] >= 75
+        assert np.all(data['apex_lat'][fin_mask][start:stop] < 75)
+        assert data['apex_lat'][fin_mask][stop] < 45
 
 
 def test_find_troughs_in_segment_nominal():
@@ -188,9 +190,12 @@ def test_find_troughs_in_segment_data(swarm_data_dir):
     smooth_dne = utils.centered_bn_func(bn.move_mean, dne, 10, pad=True, min_count=1)
     fin_mask = np.isfinite(mlat)
 
-    for tec_time in start_date + np.arange(6) * np.timedelta64(1, 'h'):
-        front = swarm.get_closest_segment(times[fin_mask], mlat[fin_mask], tec_time, 45, 75)
-        back = swarm.get_closest_segment(times[fin_mask], mlat[fin_mask], tec_time, 75, 45)
+    tec_times = start_date + np.arange(6) * np.timedelta64(1, 'h')
+    front_starts, front_stops = swarm.get_closest_segment(times[fin_mask], mlat[fin_mask], tec_times, 45, 75)
+    back_starts, back_stops = swarm.get_closest_segment(times[fin_mask], mlat[fin_mask], tec_times, 75, 45)
+    for fstart, fstop, bstart, bstop in zip(front_starts, front_stops, back_starts, back_stops):
+        front = slice(fstart, fstop)
+        back = slice(bstart, bstop)
         threshold = -.2
         front_trough = swarm.find_troughs_in_segment(mlat[fin_mask][front], smooth_dne[fin_mask][front], threshold)
         back_trough = swarm.find_troughs_in_segment(mlat[fin_mask][back], smooth_dne[fin_mask][back], threshold)

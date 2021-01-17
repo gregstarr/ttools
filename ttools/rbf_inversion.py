@@ -34,21 +34,7 @@ from skimage import measure
 from sklearn.metrics.pairwise import rbf_kernel
 from scipy.sparse import csr_matrix
 
-from ttools import utils, trough_model, config
-
-
-DEFAULT_PARAMS = {
-    'tv_weight': .06,
-    'l2_weight': .05,
-    'bge_spatial_size': 17,
-    'bge_temporal_rad': 1,
-    'cos_mlat': True,
-    'rbf_bw': 1,
-    'tv_hw': 1,
-    'tv_vw': 1,
-    'model_weight_max': 10,
-    'perimeter_th': 50
-}
+from ttools import utils, trough_model, config, io
 
 
 def extract_patches(arr, patch_shape, step=1):
@@ -79,17 +65,18 @@ def extract_patches(arr, patch_shape, step=1):
 
 
 def estimate_background(tec, patch_shape):
-    """
+    """Use a moving average filter to estimate the background TEC value. `patch_shape` must contain odd numbers
 
     Parameters
     ----------
-    tec
-    patch_shape
+    tec: numpy.ndarray[float]
+    patch_shape: tuple
 
     Returns
     -------
-
+    numpy.ndarray[float]
     """
+    assert all([2 * (p // 2) + 1 == p for p in patch_shape]), "patch_shape must be all odd numbers"
     patches = extract_patches(tec, patch_shape)
     return bn.nanmean(patches.reshape((tec.shape[0] - patch_shape[0] + 1, ) + tec.shape[1:] + (-1, )), axis=-1)
 
@@ -147,8 +134,8 @@ def get_tv_matrix(im_shape, hw=1, vw=1):
     return csr_matrix(hw * (right + left) + vw * (up + down))
 
 
-def get_optimization_args(x, times, mlt_vals=config.mlt_vals, mlat_grid=config.mlat_grid, model_weight_max=30,
-                          rbf_bw=1, tv_hw=1, tv_vw=1, l2_weight=.15, tv_weight=.06):
+def get_optimization_args(x, times, mlt_vals=config.mlt_vals, mlat_grid=config.mlat_grid, model_weight_max=25,
+                          rbf_bw=1, tv_hw=2, tv_vw=1, l2_weight=.1, tv_weight=.06):
     all_args = []
     # get deminov model
     ut = times.astype('datetime64[s]').astype(float)
@@ -177,15 +164,26 @@ def run_single(u, basis, x, tv, l2, t, output_shape):
     l2_cost = l2 @ (u ** 2)
     total_cost = main_cost + tv_cost + l2_cost
     prob = cp.Problem(cp.Minimize(total_cost), [u >= 0])
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', UserWarning)
-        prob.solve(solver=cp.SCS, max_iters=2000)
+    try:
+        prob.solve(solver=cp.GUROBI)
+    except Exception as e:
+        try:
+            print("GUROBI FAILED, RUNNING AGAIN VERBOSE:", e)
+            prob.solve(solver=cp.GUROBI, verbose=True)
+        except Exception as e:
+            print("GUROBI FAILED, USING ECOS:", e)
+            prob.solve(solver=cp.ECOS)
     return u.value.reshape(output_shape)
 
 
-def run_multiple(args):
-    with multiprocessing.Pool(processes=8) as p:
-        results = p.starmap(run_single, args)
+def run_multiple(args, parallel=True):
+    if parallel:
+        with multiprocessing.Pool(processes=4) as p:
+            results = p.starmap(run_single, args)
+    else:
+        results = []
+        for arg in args:
+            results.append(run_single(*arg))
     return np.stack(results, axis=0)
 
 
@@ -193,7 +191,7 @@ def fix_boundaries(labels):
     fixed = labels.copy()
     while True:
         boundary_pairs = np.unique(fixed[:, [0, -1]], axis=0)
-        if np.all(boundary_pairs[:, 0] == boundary_pairs[:, 1]):
+        if np.all((boundary_pairs[:, 0] == boundary_pairs[:, 1]) | np.any(boundary_pairs == 0, axis=1)):
             break
         for i in range(boundary_pairs.shape[0]):
             if np.any(boundary_pairs[i] == 0) or boundary_pairs[i, 0] == boundary_pairs[i, 1]:
@@ -210,8 +208,28 @@ def postprocess(initial_trough, perimeter_th=50, area_th=1):
         labeled = measure.label(tmap, connectivity=2)
         labeled = fix_boundaries(labeled)
         props = pandas.DataFrame(measure.regionprops_table(labeled, properties=('label', 'area', 'perimeter')))
-        error_mask = (props['perimeter'] < perimeter_th) + (props['area'] < area_th)
+        error_mask = (props['perimeter'] < perimeter_th) | (props['area'] < area_th)
         for i, r in props[error_mask].iterrows():
             tmap[labeled == r['label']] = 0
         trough[t] = tmap
     return trough
+
+
+def get_tec_troughs(tec, input_times, bg_est_shape=(3, 15, 15), model_weight_max=20, rbf_bw=1, tv_hw=1, tv_vw=1,
+                    l2_weight=.1, tv_weight=.05, perimeter_th=50, area_th=20):
+    # preprocess
+    print("Preprocessing TEC data")
+    x, times = preprocess_interval(tec, input_times, bg_est_shape=bg_est_shape)
+    # setup optimization
+    print("Setting up inversion optimization")
+    args = get_optimization_args(x, times, model_weight_max=model_weight_max, rbf_bw=rbf_bw, tv_hw=tv_hw, tv_vw=tv_vw,
+                                 l2_weight=l2_weight, tv_weight=tv_weight)
+    # run optimization
+    print("Running inversion optimization")
+    model_output = run_multiple(args, parallel=config.PARALLEL)
+    # threshold
+    initial_trough = model_output >= 1
+    # postprocess
+    print("Postprocessing inversion results")
+    trough = postprocess(initial_trough, perimeter_th, area_th)
+    return trough, x

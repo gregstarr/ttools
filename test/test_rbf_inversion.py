@@ -42,7 +42,7 @@ def test_model_artificial_example():
     shp = (4, ) + config.mlat_grid.shape
     det_log_tec = det_log_tec.reshape(shp)
     det_log_tec += np.random.randn(*shp) * .1
-    args = rbf_inversion.get_optimization_args(det_log_tec, times)
+    args = rbf_inversion.get_optimization_args(det_log_tec, times, model_weight_max=30, l2_weight=.15, tv_weight=.06)
     output = np.empty_like(det_log_tec)
     for i, a in enumerate(args):
         output[i] = rbf_inversion.run_single(*a)
@@ -71,6 +71,10 @@ def test_postprocess():
     assert trough[boundary_good_trough].all()
     assert not trough[boundary_bad_trough].any()
     assert trough[weird_good_trough].all()
+
+
+def test_background_even():
+    pass
 
 
 def test_rbf_matrix():
