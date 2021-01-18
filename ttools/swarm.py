@@ -248,7 +248,7 @@ def get_segments_data(tec_times):
         data, times = io.get_swarm_data(start_time, end_time, sat)
         times, log_ne, background, mlat, mlt = process_swarm_data_interval(data, times)
         dne = log_ne - background
-        smooth_dne = utils.centered_bn_func(bn.move_mean, dne, 10, pad=True, min_count=1)
+        smooth_dne = utils.centered_bn_func(bn.move_mean, dne, 9, pad=True, min_count=1)
         fin_mask = np.isfinite(mlat)
         for direction, (enter, exit) in zip(DIRECTIONS, ENTER_EXIT_TUPLES):
             starts, stops = get_closest_segment(times[fin_mask], mlat[fin_mask], tec_times, enter, exit)

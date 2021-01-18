@@ -53,6 +53,7 @@ if __name__ == "__main__":
 
         # get and save hyperparameter list
         params = get_random_hyperparams()
+        print(params)
         io.write_yaml(os.path.join(experiment_dir, 'params.yaml'), **params)
 
         t0 = time.time()

@@ -15,7 +15,7 @@ def datetime64_to_timestamp(dt64):
     -------
     timestamp: numpy.ndarray[float]
     """
-    return (dt64 - np.datetime64('1970-01-01T00:00:00Z')) / np.timedelta64(1, 's')
+    return (dt64 - np.datetime64('1970-01-01T00:00:00')) / np.timedelta64(1, 's')
 
 
 def datetime64_to_datetime(dt64):
@@ -164,7 +164,7 @@ def centered_bn_func(func, arr, window_diameter, pad=False, **kwargs):
     numpy.ndarray
     """
     window_radius = window_diameter // 2
-    assert 2 * window_radius + 1 == window_diameter, "window_diameter must be odd"
+    assert (2 * window_radius + 1) == window_diameter, "window_diameter must be odd"
     if pad:
         arr = np.pad(arr, window_radius, mode='edge')
     return func(arr, window_diameter, **kwargs)[2 * window_radius:]
@@ -184,7 +184,7 @@ def moving_func_trim(window_diameter, *arrays):
     tuple of numpy.ndarrays
     """
     window_radius = window_diameter // 2
-    assert 2 * window_radius + 1 == window_diameter, "window_diameter must be odd"
+    assert (2 * window_radius + 1) == window_diameter, "window_diameter must be odd"
     if window_radius == 0:
         return (array for array in arrays)
     return (array[window_radius:-window_radius] for array in arrays)
@@ -237,7 +237,7 @@ def average_angles(theta1, theta2):
     return theta_avg
 
 
-def get_grid_slice_line(x1, y1, x2, y2, data_grids, x_grid, y_grid, linewidth=3, mode='wrap', reduce_func=np.mean):
+def get_grid_slice_line(x1, y1, x2, y2, data_grids, x_grid, y_grid, **profile_line_kwargs):
     """Get slice of 2D data grids along lines defined by endpoints.
 
     Parameters
@@ -248,24 +248,27 @@ def get_grid_slice_line(x1, y1, x2, y2, data_grids, x_grid, y_grid, linewidth=3,
         list of 2D data grids to slice, can also be 3D, first axis corresponding to different lines
     x_grid, y_grid: numpy.ndarray[float]
         coordinate grids
-    linewidth, mode, reduce_func: passed to `skimage.measure.profile_line`
+    **profile_line_kwargs: passed to `skimage.measure.profile_line`
 
     Returns
     -------
     list of lists
         [slices_of_data_grid_1, ..., slices_of_data_grid_n]
     """
+    kwargs = dict(linewidth=3, mode='grid-wrap')
+    kwargs.update(profile_line_kwargs)
+
     xi1, yi1 = get_grid_coords(x1, y1, x_grid, y_grid)
     xi2, yi2 = get_grid_coords(x2, y2, x_grid, y_grid)
 
     results = [[] for _ in data_grids]
-    for t in range(xi1.shape[0]):
+    for t in range(len(xi1)):
         src = (yi1[t], xi1[t])
         dst = (yi2[t], xi2[t])
         for i, dgrid in enumerate(data_grids):
             if len(dgrid.shape) == 3:
-                dprof = profile_line(dgrid[t], src, dst, linewidth=linewidth, mode=mode, reduce_func=reduce_func)
+                dprof = profile_line(dgrid[t].astype(float), src, dst, **kwargs)
             else:
-                dprof = profile_line(dgrid, src, dst, linewidth=linewidth, mode=mode, reduce_func=reduce_func)
+                dprof = profile_line(dgrid.astype(float), src, dst, **kwargs)
             results[i].append(dprof)
     return results
