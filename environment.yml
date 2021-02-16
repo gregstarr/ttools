@@ -6,7 +6,7 @@ dependencies:
   - scikit-image
   - scikit-learn
   - bottleneck
-  - pandas
+  - pandas==1.2.2
   - pytest
   - h5py
   - cvxpy
