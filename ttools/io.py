@@ -414,7 +414,7 @@ def get_tec_data(start_date, end_date, dir=config.tec_dir):
         y = file_dates[i, 0]
         m = file_dates[i, 1]
         fn = os.path.join(dir, "{year:04d}_{month:02d}_tec.h5".format(year=y, month=m))
-        print(fn)
+        raise Exception(fn)
         t, ut, ss, n, std = open_tec_file(fn)
         in_time_mask = np.in1d(ut, ref_times_ut)
         tec.append(t[in_time_mask])
