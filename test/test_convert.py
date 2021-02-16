@@ -11,6 +11,8 @@ def test_subsolar():
     lat, lon = convert.subsol_array(times)
     for i, t in enumerate(times_dt):
         true_lat, true_lon = apexpy.helpers.subsol(t)
+        true_lon = true_lon.astype(np.float32)
+        true_lat = true_lat.astype(np.float32)
         assert true_lat == lat[i]
         assert true_lon == lon[i]
 

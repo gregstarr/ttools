@@ -97,7 +97,7 @@ def process_month(start_date, mlat_grid, mlon_grid, converter, bins, map_period=
     tec, ts = io.get_madrigal_data(start_date, start_date + 1, dir=madrigal_dir)
     print("Converting coordinates")
     mlt, ssmlon = convert.mlon_to_mlt_array(mlon_grid[None, :, :], ts[:, None, None], converter, return_ssmlon=True)
-    mlat = mlat_grid[None, :, :] * np.ones((ts.shape[0], 1, 1), dtype=float)
+    mlat = mlat_grid[None, :, :] * np.ones((ts.shape[0], 1, 1), dtype=np.float32)
     mlt[mlt > 12] -= 24
     print("Setting up for binning")
     args = assemble_binning_args(mlat, mlt, tec, ts, ssmlon, bins, map_period)

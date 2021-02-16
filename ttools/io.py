@@ -229,7 +229,7 @@ def get_madrigal_data(start_date, end_date, dir=config.madrigal_dir):
         else:
             # assume ut is increasing and has no repeating entries, basically that it is a subset of ref_times_ut
             tec[:, :, month_time_mask] = t[:, :, day_time_mask]
-    return np.moveaxis(tec, -1, 0).astype(np.float32), ref_times
+    return np.moveaxis(tec, -1, 0), ref_times
 
 
 def open_madrigal_file(fn):
@@ -252,7 +252,7 @@ def open_madrigal_file(fn):
         lat = f['Data']['Array Layout']['gdlat'][()]
         lon = f['Data']['Array Layout']['glon'][()]
     print(f"Opened madrigal file: {fn}, size: {tec.shape}")
-    return tec, timestamps, lat, lon
+    return tec.astype(np.float32), timestamps, lat.astype(np.float32), lon.astype(np.float32)
 
 
 def get_swarm_data(start_date, end_date, sat, data_dir=config.swarm_dir, coords_dir=config.swarm_coords_dir):
