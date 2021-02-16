@@ -41,8 +41,8 @@ if __name__ == "__main__":
 
     from ttools import compare, io
 
-    N_EXPERIMENTS = 20
-    N_TRAILS = 1
+    N_EXPERIMENTS = 30
+    N_TRAILS = 100
     base_dir = "E:\\trough_comparison"
 
     processed_results = []

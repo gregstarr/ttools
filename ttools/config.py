@@ -16,7 +16,7 @@ tec_file_pattern = os.path.join(tec_dir, "{year:04d}_{month:02d}_tec.h5")
 swarm_dir = "E:\\swarm\\extracted"
 swarm_coords_dir = "E:\\swarm\\coordinates"
 
-grid_file = os.path.join(tec_dir, "grid.h5")
+grid_file = os.path.join(os.path.dirname(__file__), "grid.h5")
 with h5py.File(grid_file, 'r') as f:
     mlt_vals = f['mlt'][()]
     mlat_vals = f['mlat'][()]
