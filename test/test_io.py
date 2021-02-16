@@ -73,7 +73,6 @@ def test_get_swarm_fill(swarm_data_dir):
 def test_get_tec_data(tec_data_dir):
     """Test that the correct timestamps are returned, correct data is at those timestamps, correct subsolar point mlon
     """
-    pytest.skip("Not working on CI")
     start_date = np.datetime64("2012-06-10T10:10:10")
     end_date = np.datetime64("2012-06-10T20:30:01")
     tec, times, ssmlon, n = io.get_tec_data(start_date, end_date, dir=tec_data_dir)
