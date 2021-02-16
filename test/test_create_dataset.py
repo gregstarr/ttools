@@ -37,8 +37,8 @@ def test_assemble_args(times, map_period):
 def test_process_month(madrigal_data_dir, map_period):
     """not that good of a test: wait for bugs and add asserts
     """
-    start_date = np.datetime64('2012-06-01')
-    end_date = np.datetime64('2012-06-05')
+    start_date = np.datetime64('2012-06-08')
+    end_date = np.datetime64('2012-06-13')
     converter = apexpy.Apex()
     mlat, mlon = create_dataset.get_mag_grid(config.madrigal_lat, config.madrigal_lon, converter)
     bin_edges = np.arange(-.5, 10)
