@@ -20,8 +20,8 @@ if __name__ == "__main__":
         'area_th': 20,
     }
     t0 = time.time()
-    results = compare.run_n_random_days(200, **params)
-    print(compare.process_results(results))
+    results = compare.run_n_random_days(10, **params)
+    print(compare.process_results(results, bad_mlon_range=[70, 125]))
     results.to_csv("E:\\temp_comparison_results\\results.csv")
     tf = time.time()
     print(f"THAT TOOK {(tf - t0)/60} MINUTES")

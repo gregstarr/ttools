@@ -52,7 +52,7 @@ def compare(times, tec_troughs, swarm_troughs, ssmlon, mlat_grid=config.mlat_gri
 
 
 def run_single_day(date, bg_est_shape=(3, 15, 15), model_weight_max=20, rbf_bw=1, tv_hw=1, tv_vw=1, l2_weight=.1,
-                    tv_weight=.05, perimeter_th=50, area_th=20):
+                   tv_weight=.05, perimeter_th=50, area_th=20):
     # setup time arrays
     one_h = np.timedelta64(1, 'h')
     start_time = date.astype('datetime64[D]').astype('datetime64[s]')
@@ -94,7 +94,7 @@ def run_n_random_days(n, start_date=np.datetime64("2014-01-01"), end_date=np.dat
     return results
 
 
-def process_results(results, mlon_range=None):
+def process_results(results, good_mlon_range=None, bad_mlon_range=None):
     tn, fn, fp, tp = confusion_matrix(results['tec_trough'], results['swarm_trough']).ravel()
     acc = (tn + tp) / (tn + fn + fp + tp)
     tpr = tp / (tp + fn)
@@ -115,8 +115,11 @@ def process_results(results, mlon_range=None):
         'ewall_diff_std': ewall_diff_std
     }
 
-    if mlon_range is not None:
-        mlon_mask = (results['mlon'] >= mlon_range[0]) & (results['mlon'] <= mlon_range[1])
+    if good_mlon_range is not None or bad_mlon_range is not None:
+        if good_mlon_range is not None:
+            mlon_mask = (results['mlon'] >= good_mlon_range[0]) & (results['mlon'] <= good_mlon_range[1])
+        else:
+            mlon_mask = ~((results['mlon'] >= bad_mlon_range[0]) & (results['mlon'] <= bad_mlon_range[1]))
 
         tn, fn, fp, tp = confusion_matrix(results['tec_trough'][mlon_mask], results['swarm_trough'][mlon_mask]).ravel()
         acc = (tn + tp) / (tn + fn + fp + tp)

@@ -4,7 +4,6 @@ import glob
 
 from ttools import io, utils, convert, config, swarm
 
-
 swarm_files = io.filter_swarm_files(glob.glob(os.path.join(config.swarm_dir, "SW_EXTD_EFI*.cdf")))
 for file in swarm_files:
     name = utils.no_ext_fn(file)
@@ -19,4 +18,4 @@ for file in swarm_files:
     mlt = convert.mlon_to_mlt_array(apex_lon, swarm_data['Timestamp'], converter)
 
     io.write_h5(coords_fn, apex_lat=apex_lat, apex_lon=apex_lon, qd_lat=qd_lat, qd_lon=qd_lon, mlt=mlt, lat=lat,
-                  lon=lon)
+                lon=lon)

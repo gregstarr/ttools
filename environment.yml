@@ -17,3 +17,5 @@ dependencies:
   - pip
   - pip:
     - apexpy
+# install gurobi if possible, it is much faster, get a license then:
+# python -m pip install -i https://pypi.gurobi.com gurobipy
