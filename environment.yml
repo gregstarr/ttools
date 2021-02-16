@@ -1,4 +1,3 @@
-name: ttools
 channels:
   - conda-forge
 dependencies:
