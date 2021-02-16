@@ -413,11 +413,8 @@ def get_tec_data(start_date, end_date, dir=config.tec_dir):
     for i in range(file_dates.shape[0]):
         y = file_dates[i, 0]
         m = file_dates[i, 1]
-        try:
-            fn = os.path.join(dir, "{year:04d}_{month:02d}_tec.h5".format(year=y, month=m))
-        except IndexError:
-            print(f"{y}-{m} TEC file doesn't exist")
-            continue
+        fn = os.path.join(dir, "{year:04d}_{month:02d}_tec.h5".format(year=y, month=m))
+        print(fn)
         t, ut, ss, n, std = open_tec_file(fn)
         in_time_mask = np.in1d(ut, ref_times_ut)
         tec.append(t[in_time_mask])
