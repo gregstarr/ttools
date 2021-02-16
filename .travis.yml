@@ -6,15 +6,16 @@ install:
   - source "$HOME/miniconda/etc/profile.d/conda.sh"
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
-  - conda update -q conda
+  - conda update conda
   - conda info -a
-
-  - conda env create -q -f environment.yml
+  - conda env create -f environment.yml
   - conda activate ttools
   - export PYTHONPATH=/home/travis/build/gregstarr/ttools
+  - python -m pip install --upgrade pip
+  - pip install coveralls
   
 script:
-  - coverage run --source=pychop3d -m pytest test/
+  - coverage run --source=ttools -m pytest test/
   
 notifications:
   email:
