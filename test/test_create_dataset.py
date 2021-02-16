@@ -4,7 +4,6 @@ import apexpy
 
 from ttools import create_dataset, config, io
 
-
 map_periods = [np.timedelta64(10, 'm'), np.timedelta64(30, 'm'), np.timedelta64(1, 'h'), np.timedelta64(2, 'h')]
 
 
@@ -38,13 +37,14 @@ def test_assemble_args(times, map_period):
 def test_process_month(madrigal_data_dir, map_period):
     """not that good of a test: wait for bugs and add asserts
     """
-    month = np.datetime64('2012-06')
+    start_date = np.datetime64('2012-06-01')
+    end_date = np.datetime64('2012-06-05')
     converter = apexpy.Apex()
     mlat, mlon = create_dataset.get_mag_grid(config.madrigal_lat, config.madrigal_lon, converter)
     bin_edges = np.arange(-.5, 10)
     bins = [bin_edges + 30, bin_edges]
-    times, tec, ssmlon, n, std = create_dataset.process_month(month, mlat, mlon, converter, bins, map_period,
-                                                              madrigal_data_dir)
+    times, tec, ssmlon, n, std = create_dataset.process_month(start_date, end_date, mlat, mlon, converter, bins,
+                                                              map_period, madrigal_data_dir)
     assert times.shape[0] == tec.shape[0] == n.shape[0] == std.shape[0] == ssmlon.shape[0]
     assert np.isnan(tec[times < np.datetime64('2012-06-10')]).all()
     assert np.isnan(tec[times >= np.datetime64('2012-06-11')]).all()

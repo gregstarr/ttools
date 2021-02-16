@@ -69,7 +69,7 @@ def calculate_bins(mlat, mlt, tec, times, ssmlon, bins):
     return times[0], final_tec, ssmlon[0], final_tec_n, final_tec_s
 
 
-def process_month(start_date, mlat_grid, mlon_grid, converter, bins, map_period=np.timedelta64(1, 'h'),
+def process_month(start_date, end_date, mlat_grid, mlon_grid, converter, bins, map_period=np.timedelta64(1, 'h'),
                   madrigal_dir=None):
     """Processes one month's worth of madrigal data. Opens madrigal h5 files, converts input mlon grid to MLT by
     computing subsolar points at each time step, sets up and runs TEC binning, unpacks and returns results.
@@ -91,10 +91,8 @@ def process_month(start_date, mlat_grid, mlon_grid, converter, bins, map_period=
     """
     if not isinstance(madrigal_dir, str):
         madrigal_dir = config.madrigal_dir
-    print(start_date)
-    if start_date.dtype != np.dtype('datetime64[M]'):
-        start_date = start_date.astype('datetime64[M]')
-    tec, ts = io.get_madrigal_data(start_date, start_date + 1, dir=madrigal_dir)
+    print(start_date, end_date)
+    tec, ts = io.get_madrigal_data(start_date, end_date, dir=madrigal_dir)
     print("Converting coordinates")
     mlt, ssmlon = convert.mlon_to_mlt_array(mlon_grid[None, :, :], ts[:, None, None], converter, return_ssmlon=True)
     mlat = mlat_grid[None, :, :] * np.ones((ts.shape[0], 1, 1))
@@ -140,7 +138,7 @@ def process_year(start_date, ref_lat, ref_lon, bins):
     mlat, mlon = get_mag_grid(ref_lat, ref_lon, converter)
     months = np.arange(start_date, start_date + 1, np.timedelta64(1, 'M'))
     for month in months:
-        times, tec, ssmlon, n, std = process_month(month, mlat, mlon, converter, bins)
+        times, tec, ssmlon, n, std = process_month(month, month + 1, mlat, mlon, converter, bins)
         if np.isfinite(tec).any():
             ymd = utils.decompose_datetime64(month)
             fn = config.tec_file_pattern.format(year=ymd[0, 0], month=ymd[0, 1])
