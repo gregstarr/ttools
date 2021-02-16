@@ -97,7 +97,7 @@ def process_month(start_date, mlat_grid, mlon_grid, converter, bins, map_period=
     tec, ts = io.get_madrigal_data(start_date, start_date + 1, dir=madrigal_dir)
     print("Converting coordinates")
     mlt, ssmlon = convert.mlon_to_mlt_array(mlon_grid[None, :, :], ts[:, None, None], converter, return_ssmlon=True)
-    mlat = mlat_grid[None, :, :] * np.ones((ts.shape[0], 1, 1), dtype=np.float32)
+    mlat = mlat_grid[None, :, :] * np.ones((ts.shape[0], 1, 1))
     mlt[mlt > 12] -= 24
     print("Setting up for binning")
     args = assemble_binning_args(mlat, mlt, tec, ts, ssmlon, bins, map_period)
@@ -116,8 +116,8 @@ def process_month(start_date, mlat_grid, mlon_grid, converter, bins, map_period=
 def get_mag_grid(ref_lat, ref_lon, converter):
     lon_grid, lat_grid = np.meshgrid(ref_lon, ref_lat)
     mlat, mlon = converter.convert(lat_grid.ravel(), lon_grid.ravel(), 'geo', 'apex', height=350)
-    mlat = mlat.reshape(lat_grid.shape).astype(np.float32)
-    mlon = mlon.reshape(lat_grid.shape).astype(np.float32)
+    mlat = mlat.reshape(lat_grid.shape)
+    mlon = mlon.reshape(lat_grid.shape)
     return mlat, mlon
 
 

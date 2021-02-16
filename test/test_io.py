@@ -18,7 +18,7 @@ def test_get_madrigal_data(madrigal_data_dir):
     file_tec_r = np.moveaxis(file_tec[:, :, np.in1d(file_times, times.astype('datetime64[s]').astype(int))], -1, 0)
     file_tec_mask = np.isfinite(file_tec_r)
     tec_mask = np.isfinite(tec)
-    assert np.all(file_tec_r[file_tec_mask].astype(np.float32) == tec[tec_mask])
+    assert np.all(file_tec_r[file_tec_mask] == tec[tec_mask])
 
 
 def test_get_madrigal_fill(madrigal_data_dir):

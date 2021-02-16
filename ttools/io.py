@@ -252,7 +252,7 @@ def open_madrigal_file(fn):
         lat = f['Data']['Array Layout']['gdlat'][()]
         lon = f['Data']['Array Layout']['glon'][()]
     print(f"Opened madrigal file: {fn}, size: {tec.shape}")
-    return tec.astype(np.float32), timestamps, lat.astype(np.float32), lon.astype(np.float32)
+    return tec, timestamps, lat, lon
 
 
 def get_swarm_data(start_date, end_date, sat, data_dir=config.swarm_dir, coords_dir=config.swarm_coords_dir):
