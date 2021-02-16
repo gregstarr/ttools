@@ -13,6 +13,7 @@ dependencies:
   - pip
   - pip:
     - apexpy
+    - pysat
 
 # pysatcdf, leaving off because it's not working in CI
 
