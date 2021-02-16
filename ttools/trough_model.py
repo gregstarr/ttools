@@ -3,7 +3,7 @@ import apexpy
 from scipy.interpolate import interp1d
 import datetime
 
-from ttools import io, convert
+from ttools import io, convert, config
 
 
 def get_model(ut, mlt_vals):
@@ -47,7 +47,7 @@ def _model_subroutine_lat(mlt, glon, kp):
     return 65.5 - 2.4 * kp + phi_t + phi_lon * np.exp(-.3 * kp)
 
 
-def _get_weighted_kp(ut, fn="E:\\2000_2020_kp_ap.txt", tau=.6, T=10):
+def _get_weighted_kp(ut, fn=config.kp_file, tau=.6, T=10):
     """Get a weighed sum of kp values over time. See paper for details.
 
     Parameters

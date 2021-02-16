@@ -10,7 +10,6 @@ madrigal_lon = np.arange(-180, 180)
 
 # processed TEC data directory
 tec_dir = "E:\\tec_data"
-tec_file_pattern = os.path.join(tec_dir, "{year:04d}_{month:02d}_tec.h5")
 
 # SWARM data directory
 swarm_dir = "E:\\swarm\\extracted"
@@ -21,7 +20,10 @@ with h5py.File(grid_file, 'r') as f:
     mlt_vals = f['mlt'][()]
     mlat_vals = f['mlat'][()]
 mlt_grid, mlat_grid = np.meshgrid(mlt_vals, mlat_vals)
+mlt_grid = mlt_grid.astype(np.float32)
+mlat_grid = mlat_grid.astype(np.float32)
 
+kp_file = os.path.join(os.path.dirname(__file__), "2000_2020_kp_ap.txt")
 
 # other settings
 PARALLEL = True

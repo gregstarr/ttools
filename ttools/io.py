@@ -229,7 +229,7 @@ def get_madrigal_data(start_date, end_date, dir=config.madrigal_dir):
         else:
             # assume ut is increasing and has no repeating entries, basically that it is a subset of ref_times_ut
             tec[:, :, month_time_mask] = t[:, :, day_time_mask]
-    return np.moveaxis(tec, -1, 0), ref_times
+    return np.moveaxis(tec, -1, 0).astype(np.float32), ref_times
 
 
 def open_madrigal_file(fn):
@@ -414,7 +414,7 @@ def get_tec_data(start_date, end_date, dir=config.tec_dir):
         y = file_dates[i, 0]
         m = file_dates[i, 1]
         try:
-            fn = os.path.join(dir, config.tec_file_pattern.format(year=y, month=m))
+            fn = os.path.join(dir, "{year:04d}_{month:02d}_tec.h5".format(year=y, month=m))
         except IndexError:
             print(f"{y}-{m} TEC file doesn't exist")
             continue

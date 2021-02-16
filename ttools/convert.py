@@ -19,6 +19,7 @@ def mlon_to_mlt_array(mlon, times, converter=None, ssheight=50*6371, return_ssml
         converter = apexpy.Apex()
     ssglat, ssglon = subsol_array(times)
     ssmlat, ssmlon = converter.geo2apex(ssglat, ssglon, ssheight)
+    ssmlon = ssmlon.astype(np.float32)
     mlt = (180 + mlon - ssmlon) / 15 % 24
     if return_ssmlon:
         return mlt, ssmlon
@@ -95,4 +96,4 @@ def subsol_array(times):
     sslon = 180.0 - (ut / 240.0 + etdeg)  # Earth rotates one degree every 240 s.
     nrot = np.round(sslon / 360.0)
     sslon = sslon - 360.0 * nrot
-    return sslat, sslon
+    return sslat.astype(np.float32), sslon.astype(np.float32)

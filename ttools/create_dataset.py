@@ -116,8 +116,8 @@ def process_month(start_date, mlat_grid, mlon_grid, converter, bins, map_period=
 def get_mag_grid(ref_lat, ref_lon, converter):
     lon_grid, lat_grid = np.meshgrid(ref_lon, ref_lat)
     mlat, mlon = converter.convert(lat_grid.ravel(), lon_grid.ravel(), 'geo', 'apex', height=350)
-    mlat = mlat.reshape(lat_grid.shape)
-    mlon = mlon.reshape(lat_grid.shape)
+    mlat = mlat.reshape(lat_grid.shape).astype(np.float32)
+    mlon = mlon.reshape(lat_grid.shape).astype(np.float32)
     return mlat, mlon
 
 
