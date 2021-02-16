@@ -1,9 +1,7 @@
 name: ttools
 channels:
   - conda-forge
-  - rstoneback
 dependencies:
-  - python=3.7
   - numpy
   - scipy
   - scikit-image
@@ -13,9 +11,11 @@ dependencies:
   - pytest
   - h5py
   - cvxpy
-  - pysatCDF
   - pip
   - pip:
     - apexpy
+
+# pysatcdf, leaving off because it's not working in CI
+
 # install gurobi if possible, it is much faster, get a license then:
 # python -m pip install -i https://pypi.gurobi.com gurobipy
