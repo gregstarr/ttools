@@ -61,8 +61,8 @@ def fix_latlon(lat, lon):
     r = 90 - lat
     x = r * np.cos(theta)
     y = r * np.sin(theta)
-    xp = utils.centered_bn_func(bn.move_median, x, 20, pad=True, min_count=5)
-    yp = utils.centered_bn_func(bn.move_median, y, 20, pad=True, min_count=5)
+    xp = utils.centered_bn_func(bn.move_median, x, 21, pad=True, min_count=5)
+    yp = utils.centered_bn_func(bn.move_median, y, 21, pad=True, min_count=5)
     d = np.hypot(x - xp, y - yp)
     bad, = np.nonzero(d > 10 * bn.nanmean(d))
     new_x = xp[bad]
@@ -71,15 +71,8 @@ def fix_latlon(lat, lon):
     new_lon = np.degrees(np.arctan2(new_y, new_x))
     fixed_lon[bad] = new_lon
     fixed_lat[bad] = new_lat
+    print(f"Fixed {bad.shape[0]} bad coordinates")
     return fixed_lat, fixed_lon
-
-
-def get_pixel_mask(mlt, mlat, radius):
-    bins = [np.arange(29.5, 90), np.arange(-12 / 360, 24, 24 / 360)]
-    path = binned_statistic_2d(mlat, mlt, np.ones(mlat.shape[0]), 'sum', bins=bins).statistic
-    kernel = np.ones(radius + 1)[None, :]
-    m = convolve2d(path, kernel, mode='same', boundary='wrap')
-    return m > 0
 
 
 def process_swarm_data_interval(data, times, median_window=3, mean_window=481):

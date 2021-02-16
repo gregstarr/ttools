@@ -187,7 +187,7 @@ def test_find_troughs_in_segment_data(swarm_data_dir):
     data, times = io.get_swarm_data(start_date, end_date, 'C', data_dir=swarm_data_dir, coords_dir=swarm_data_dir)
     times, logne, background, mlat, mlt = swarm.process_swarm_data_interval(data, times)
     dne = logne - background
-    smooth_dne = utils.centered_bn_func(bn.move_mean, dne, 10, pad=True, min_count=1)
+    smooth_dne = utils.centered_bn_func(bn.move_mean, dne, 11, pad=True, min_count=1)
     fin_mask = np.isfinite(mlat)
 
     tec_times = start_date + np.arange(6) * np.timedelta64(1, 'h')
