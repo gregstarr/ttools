@@ -271,4 +271,4 @@ def get_grid_slice_line(x1, y1, x2, y2, data_grids, x_grid, y_grid, **profile_li
             else:
                 dprof = profile_line(dgrid.astype(float), src, dst, **kwargs)
             results[i].append(dprof)
-    return [np.asarray(r, object) for r in results]
+    return results

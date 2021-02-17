@@ -13,6 +13,7 @@ dependencies:
   - pip
   - pip:
     - apexpy
+    - pysat
     - pysatcdf==0.3.1
 
 # install gurobi if possible, it is much faster, get a license then:

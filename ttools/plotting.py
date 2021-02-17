@@ -44,8 +44,8 @@ def polar_pcolormesh(ax, mlat, mlt, value, **kwargs):
 
 def prepare_swarm_line_plot(t, swarm_segments, swarm_troughs, mlat_profs, x_profs):
     troughs = swarm_troughs[swarm_troughs['tec_ind'] == t]
-    m_p = mlat_profs[swarm_troughs['tec_ind'] == t]
-    x_p = x_profs[swarm_troughs['tec_ind'] == t]
+    m_p = [p for i, p in enumerate(mlat_profs) if swarm_troughs['tec_ind'].values[i] == t]
+    x_p = [p for i, p in enumerate(x_profs) if swarm_troughs['tec_ind'].values[i] == t]
     segments = []
     for sat_segments in swarm_segments.values():
         for segment in sat_segments.values():
