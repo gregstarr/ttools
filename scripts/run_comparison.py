@@ -9,15 +9,15 @@ if __name__ == "__main__":
     from ttools import compare
 
     params = {
-        'bg_est_shape': (3, 9, 9),
-        'model_weight_max': 25,
+        'bg_est_shape': (3, 17, 17),
+        'model_weight_max': 30,
         'rbf_bw': 1,
         'tv_hw': 1,
         'tv_vw': 1,
-        'l2_weight': .002,
-        'tv_weight': .002,
-        'perimeter_th': 35,
-        'area_th': 70,
+        'l2_weight': .1,
+        'tv_weight': .1,
+        'perimeter_th': 50,
+        'area_th': 50,
     }
     t0 = time.time()
     results = compare.run_n_random_days(100, **params, make_plots=True, plot_dir="E:\\temp_plots")

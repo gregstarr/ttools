@@ -255,7 +255,7 @@ def get_grid_slice_line(x1, y1, x2, y2, data_grids, x_grid, y_grid, **profile_li
     list of lists
         [slices_of_data_grid_1, ..., slices_of_data_grid_n]
     """
-    kwargs = dict(linewidth=3, mode='grid-wrap')
+    kwargs = dict(linewidth=3, mode='grid-wrap', reduce_func=np.nanmean)
     kwargs.update(profile_line_kwargs)
 
     xi1, yi1 = get_grid_coords(x1, y1, x_grid, y_grid)
