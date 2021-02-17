@@ -2,8 +2,10 @@ import numpy as np
 import pandas
 import traceback
 from sklearn.metrics import confusion_matrix
+import matplotlib.pyplot as plt
+import os
 
-from ttools import config, io, swarm, rbf_inversion, utils
+from ttools import config, io, swarm, rbf_inversion, utils, plotting
 
 
 def compare(times, tec_troughs, swarm_troughs, ssmlon, mlat_grid=config.mlat_grid, mlt_grid=config.mlt_grid):
@@ -52,7 +54,7 @@ def compare(times, tec_troughs, swarm_troughs, ssmlon, mlat_grid=config.mlat_gri
 
 
 def run_single_day(date, bg_est_shape=(3, 15, 15), model_weight_max=20, rbf_bw=1, tv_hw=1, tv_vw=1, l2_weight=.1,
-                   tv_weight=.05, perimeter_th=50, area_th=20):
+                   tv_weight=.05, perimeter_th=50, area_th=20, make_plots=False, plot_dir=None):
     # setup time arrays
     one_h = np.timedelta64(1, 'h')
     start_time = date.astype('datetime64[D]').astype('datetime64[s]')
@@ -71,12 +73,32 @@ def run_single_day(date, bg_est_shape=(3, 15, 15), model_weight_max=20, rbf_bw=1
     swarm_segments = swarm.get_segments_data(comparison_times)
     swarm_troughs = swarm.get_swarm_troughs(swarm_segments)
 
+    if make_plots:
+        data_grids = [config.mlat_grid, x[swarm_troughs['tec_ind']]]
+        mlat_profs, x_profs = utils.get_grid_slice_line(swarm_troughs['seg_e1_mlt'], swarm_troughs['seg_e1_mlat'],
+                                                        swarm_troughs['seg_e2_mlt'], swarm_troughs['seg_e2_mlat'],
+                                                        data_grids, config.mlt_grid, config.mlat_grid)
+        trimmed_tec, = utils.moving_func_trim(bg_est_shape[0], tec)
+        for t in range(len(comparison_times)):
+            polar_fig, polar_ax = plt.subplots(1, 3, figsize=(20, 12), subplot_kw=dict(projection='polar'),
+                                               tight_layout=True)
+            line_fig, line_ax = plt.subplots(3, 2, figsize=(20, 12), tight_layout=True, sharex=True, sharey=True)
+            swarm_troughs_t, swarm_segments_t, m_p, x_p = plotting.prepare_swarm_line_plot(t, swarm_segments,
+                                                                                           swarm_troughs, mlat_profs,
+                                                                                           x_profs)
+            plotting.plot_all(polar_ax, line_ax, config.mlat_grid, config.mlt_grid, trimmed_tec[t], x[t],
+                              swarm_troughs_t, tec_troughs[t], swarm_segments_t, m_p, x_p)
+            polar_fig.savefig(os.path.join(plot_dir, f"{comparison_times[t].astype('datetime64[D]')}_{t}_polar.png"))
+            line_fig.savefig(os.path.join(plot_dir, f"{comparison_times[t].astype('datetime64[D]')}_{t}_line.png"))
+            plt.close(polar_fig)
+            plt.close(line_fig)
+
     return compare(comparison_times, tec_troughs, swarm_troughs, ssmlon)
 
 
 def run_n_random_days(n, start_date=np.datetime64("2014-01-01"), end_date=np.datetime64("2020-01-01"),
                       bg_est_shape=(3, 15, 15), model_weight_max=20, rbf_bw=1, tv_hw=1, tv_vw=1, l2_weight=.1,
-                      tv_weight=.05, perimeter_th=50, area_th=20):
+                      tv_weight=.05, perimeter_th=50, area_th=20, make_plots=False, plot_dir=None):
     # get random days
     time_range_days = (end_date - start_date).astype('timedelta64[D]').astype(int)
     offsets = np.random.randint(0, time_range_days, n)
@@ -86,7 +108,7 @@ def run_n_random_days(n, start_date=np.datetime64("2014-01-01"), end_date=np.dat
         print(f"Running {date}")
         try:
             result = run_single_day(date, bg_est_shape, model_weight_max, rbf_bw, tv_hw, tv_vw, l2_weight, tv_weight,
-                                    perimeter_th, area_th)
+                                    perimeter_th, area_th, make_plots, plot_dir)
             results.append(result)
         except Exception:
             traceback.print_exc()

@@ -9,18 +9,18 @@ if __name__ == "__main__":
     from ttools import compare
 
     params = {
-        'bg_est_shape': (3, 15, 15),
-        'model_weight_max': 20,
+        'bg_est_shape': (3, 9, 9),
+        'model_weight_max': 25,
         'rbf_bw': 1,
         'tv_hw': 1,
         'tv_vw': 1,
-        'l2_weight': .08,
-        'tv_weight': .05,
-        'perimeter_th': 50,
-        'area_th': 20,
+        'l2_weight': .002,
+        'tv_weight': .002,
+        'perimeter_th': 35,
+        'area_th': 70,
     }
     t0 = time.time()
-    results = compare.run_n_random_days(100, **params)
+    results = compare.run_n_random_days(100, **params, make_plots=True, plot_dir="E:\\temp_plots")
     stats = compare.process_results(results, bad_mlon_range=[65, 130])
     for k, v in stats.items():
         print(k, v)
