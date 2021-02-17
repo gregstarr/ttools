@@ -1,7 +1,7 @@
 import numpy as np
 import apexpy
 
-from ttools import convert, io, utils
+from ttools import convert, utils
 
 
 def test_subsolar():

@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import apexpy
 
-from ttools import create_dataset, config, io
+from ttools import create_dataset, config
 
 map_periods = [np.timedelta64(10, 'm'), np.timedelta64(30, 'm'), np.timedelta64(1, 'h'), np.timedelta64(2, 'h')]
 
