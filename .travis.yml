@@ -1,7 +1,9 @@
 language: python
 
 python:
+  - "3.6"
   - "3.7"
+  - "3.8"
   
 addons:
   apt:
@@ -17,18 +19,11 @@ install:
   - conda config --set always_yes yes --set changeps1 no
   - conda update conda
   - conda info -a
-  - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION
+  - conda env create -n test-environment python=$TRAVIS_PYTHON_VERSION -f environment.yml
   - conda activate test-environment
-  - conda env update -f environment.yml
-  - cd ..
-  - git clone https://github.com/rstoneback/pysatCDF.git
-  - cd pysatCDF
-  - python setup.py install
-  - cd ../ttools
   - export PYTHONPATH=/home/travis/build/gregstarr/ttools
   - python -m pip install --upgrade pip
-  - pip install coveralls
-  - pip install gdown
+  - pip install coveralls gdown
   - mkdir -p test/test_tec_data
   - cd test/test_tec_data
   - gdown https://drive.google.com/uc?id=1tE6kLCmLMFulxhVu95gK8VVZNh0n-3hx
