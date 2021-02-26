@@ -35,59 +35,6 @@ def datetime64_to_datetime(dt64):
     return datetime.datetime.utcfromtimestamp(ts)
 
 
-def idx_to_timestamp(idx):
-    """Convert (N x 3) array of year, month (jan = 1), hour to timestamps
-
-    Parameters
-    ----------
-    idx: numpy.ndarray (N x 3)
-
-    Returns
-    -------
-    timestamps: numpy.ndarray (N, )
-    """
-    return idx_to_datetime64(idx).astype(int)
-
-
-def idx_to_datetime64(idx):
-    """Convert (N x 3) array of year, month (jan = 1), hour to numpy.datetime64
-
-    Parameters
-    ----------
-    idx: numpy.ndarray (N x 3)
-
-    Returns
-    -------
-    datetime64: numpy.ndarray[datetime64]
-    """
-    year = (idx[:, 0] - 1970).astype('datetime64[Y]')
-    month = (idx[:, 1] - 1).astype('timedelta64[M]')
-    hour = idx[:, 2].astype('timedelta64[h]')
-    npdt = year + month + hour
-    return npdt.astype('datetime64[s]')
-
-
-def datetime64_to_idx(dt64):
-    """Convert array of np.datetime64 to an array (N x 3) of year, month (jan = 1), hour
-
-    Parameters
-    ----------
-    dt64: numpy.ndarray[datetime64]
-
-    Returns
-    -------
-    idx: numpy.ndarray (N x 3)
-    """
-    year_floor = dt64.astype('datetime64[Y]')
-    month_floor = dt64.astype('datetime64[M]')
-
-    year = year_floor.astype(int) + 1970
-    month = (dt64 - year_floor).astype('timedelta[M]').astype(int) + 1
-    hour = (dt64 - month_floor).astype('timedelta[h]').astype(int)
-
-    return np.column_stack((year, month, hour))
-
-
 def decompose_datetime64(dt64):
     """Convert array of np.datetime64 to an array (N x 3) of year, month (jan=1), day (1 index)
 
@@ -107,27 +54,6 @@ def decompose_datetime64(dt64):
     day = (dt64.astype('datetime64[D]') - month_floor).astype(int) + 1
 
     return np.column_stack((year, month, day))
-
-
-def get_random_map_id(start_time=np.datetime64("2013-12-03T00:00:00"), end_time=np.datetime64("2019-12-30T00:00:00")):
-    """gets random year, month and hour within the time range
-
-    Parameters
-    ----------
-    start_time: np.datetime64
-    end_time: np.datetime64
-
-    Returns
-    -------
-    year, month, hour: (int, int, int)
-    """
-    dset_range = (end_time.astype('datetime64[h]') - start_time.astype('datetime64[h]')).astype(int)
-    hours_offset = np.random.randint(0, dset_range)
-    map_time = start_time + np.timedelta64(hours_offset, 'h')
-    year = map_time.astype('datetime64[Y]').astype(int) + 1970
-    month = map_time.astype('datetime64[M]').astype(int) % 12 + 1
-    index = (map_time.astype('datetime64[h]') - map_time.astype('datetime64[M]')).astype(int)
-    return year, month, index
 
 
 def no_ext_fn(fn):

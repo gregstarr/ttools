@@ -28,9 +28,3 @@ kp_file = os.path.join(os.path.dirname(__file__), "2000_2020_kp_ap.txt")
 
 # other settings
 PARALLEL = True
-
-
-if __name__ == "__main__":
-    year = 2012
-    month = 6
-    print(tec_file_pattern.format(year=year, month=month))
