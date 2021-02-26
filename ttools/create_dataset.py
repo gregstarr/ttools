@@ -165,20 +165,3 @@ def process_dataset(start_year, end_year, mlat_bins, mlt_bins):
     print((tf - t0) / 60)
     # make grid file
     io.write_h5(config.grid_file, mlt=mlt_vals, mlat=mlat_vals)
-
-
-if __name__ == "__main__":
-    import sys
-    start_year = "2012"
-    end_year = "2013"
-    if len(sys.argv) > 1:
-        start_year = sys.argv[1]
-        end_year = sys.argv[2]
-    # configure date ranges
-    START_YEAR = np.datetime64(start_year)
-    END_YEAR = np.datetime64(end_year)
-
-    # configure grid
-    MLAT_BINS = np.arange(29.5, 90)
-    MLT_BINS = np.arange(-12, 12 + 24 / 360, 48 / 360)
-    process_dataset(START_YEAR, END_YEAR, MLAT_BINS, MLT_BINS)

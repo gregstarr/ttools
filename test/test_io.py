@@ -1,6 +1,5 @@
 import numpy as np
 import os
-import pytest
 import apexpy
 
 from ttools import io, config, utils, convert
@@ -82,3 +81,19 @@ def test_get_tec_data(tec_data_dir):
     sslat, sslon = convert.subsol_array(correct_times)
     true_ssmlat, true_ssmlon = converter.geo2apex(sslat, sslon, 50*6371)
     assert abs(true_ssmlon - ssmlon).max() < .1
+
+
+def test_get_arb_data():
+    pass
+
+
+def test_open_arb_file():
+    pass
+
+
+def test_write_h5():
+    pass
+
+
+def test_write_yaml():
+    pass

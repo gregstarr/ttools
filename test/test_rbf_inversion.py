@@ -1,8 +1,3 @@
-"""
-- postprocess artificial troughs
-- run_single on artificial detrended-log-tec
-"""
-
 import numpy as np
 
 from ttools import rbf_inversion, config
@@ -83,3 +78,4 @@ def test_rbf_matrix():
 
 def test_tv_matrix():
     pass
+
