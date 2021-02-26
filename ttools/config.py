@@ -11,6 +11,9 @@ madrigal_lon = np.arange(-180, 180)
 # processed TEC data directory
 tec_dir = "E:\\tec_data"
 
+# processed auroral boundary data directory
+arb_dir = "E:\\auroral_boundary"
+
 # SWARM data directory
 swarm_dir = "E:\\swarm\\extracted"
 swarm_coords_dir = "E:\\swarm\\coordinates"

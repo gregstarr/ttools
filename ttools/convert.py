@@ -2,13 +2,21 @@ import apexpy
 import numpy as np
 
 
+def mlon_to_mlt_sub(mlon, ssmlon):
+    return (180 + mlon - ssmlon) / 15 % 24
+
+
+def mlt_to_mlon_sub(mlt, ssmlon):
+    return (15 * mlt - 180 + ssmlon + 360) % 360
+
+
 def geo_to_mlt_array(glat, glon, height, times, converter=None, ssheight=50*6371):
     if times.dtype is not np.dtype('datetime64[s]'):
         times = times.astype('datetime64[s]')
     if converter is None:
         converter = apexpy.Apex()
     mlat, mlon = converter.geo2apex(glat, glon, height)
-    mlt = mlon_to_mlt_array(mlon, times, converter)
+    mlt = mlon_to_mlt_array(mlon, times, converter, ssheight=ssheight)
     return mlat, mlt
 
 
@@ -19,7 +27,7 @@ def mlon_to_mlt_array(mlon, times, converter=None, ssheight=50*6371, return_ssml
         converter = apexpy.Apex()
     ssglat, ssglon = subsol_array(times)
     ssmlat, ssmlon = converter.geo2apex(ssglat, ssglon, ssheight)
-    mlt = (180 + mlon - ssmlon) / 15 % 24
+    mlt = mlon_to_mlt_sub(mlon, ssmlon)
     if return_ssmlon:
         return mlt, ssmlon
     return mlt

@@ -163,7 +163,7 @@ def get_region_bounds(enter_mask, exit_mask):
     return trimmed_starts, trimmed_ends
 
 
-def find_troughs_in_segment(mlat, smooth_dne, threshold=-.2, width_min=1, width_max=17):
+def find_troughs_in_segment(mlat, smooth_dne, threshold=-.2, width_min=1, width_max=17, fin_rmin=.25):
     """find troughs in a 45-75 segment. `mlat` contains no NaNs, smooth_dne may contain NaNs.
 
     Parameters
@@ -197,7 +197,7 @@ def find_troughs_in_segment(mlat, smooth_dne, threshold=-.2, width_min=1, width_
         width = abs(mlat[edge_1] - mlat[edge_2])
         if not width_min <= width <= width_max:
             continue
-        if fin_mask[edge_1:edge_2].mean() < .5:
+        if fin_mask[edge_1:edge_2].mean() < fin_rmin:
             continue
         min_idx = edge_1 + np.nanargmin(smooth_dne_i[edge_1:edge_2])
         dne_min = smooth_dne_i[min_idx]

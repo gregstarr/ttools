@@ -76,7 +76,7 @@ def process_month(start_date, end_date, mlat_grid, mlon_grid, converter, bins, m
 
     Parameters
     ----------
-    start_date: np.datetime64
+    start_date, end_date: np.datetime64
     mlat_grid, mlon_grid: numpy.ndarray[float] (X, Y)
     converter: apexpy.Apex
     bins: list[numpy.ndarray[float] (X + 1, ), numpy.ndarray[float] (Y + 1, )]
@@ -119,24 +119,22 @@ def get_mag_grid(ref_lat, ref_lon, converter):
     return mlat, mlon
 
 
-def process_year(start_date, ref_lat, ref_lon, bins):
+def process_year(start_date, end_date, ref_lat, ref_lon, bins):
     """Processes monthly madrigal data and writes to files.
 
     Parameters
     ----------
-    start_date: np.datetime64
+    start_date, end_date: np.datetime64
     ref_lat: numpy.ndarray[float]
         latitude values of madrigal lat-lon grid
     ref_lon: numpy.ndarray[float]
         longitude values of madrigal lat-lon grid
     bins: list[numpy.ndarray[float] (X + 1, ), numpy.ndarray[float] (Y + 1, )]
     """
-    if start_date.dtype != np.dtype('datetime64[Y]'):
-        start_date = start_date.astype('datetime64[Y]')
     apex_date = utils.datetime64_to_datetime(start_date)
     converter = apexpy.Apex(date=apex_date)
     mlat, mlon = get_mag_grid(ref_lat, ref_lon, converter)
-    months = np.arange(start_date, start_date + 1, np.timedelta64(1, 'M'))
+    months = np.arange(start_date, end_date, np.timedelta64(1, 'M'))
     for month in months:
         times, tec, ssmlon, n, std = process_month(month, month + 1, mlat, mlon, converter, bins)
         if np.isfinite(tec).any():
@@ -153,10 +151,8 @@ def process_dataset(start_year, end_year, mlat_bins, mlt_bins):
 
     Parameters
     ----------
-    start_year: np.datetime64
-    end_year: np.datetime64
-    mlat_bins: np.ndarrat[float]
-    mlt_bins: np.ndarrat[float]
+    start_year, end_year: np.datetime64
+    mlat_bins, mlt_bins: np.ndarrat[float]
     """
     mlat_vals = (mlat_bins[:-1] + mlat_bins[1:]) / 2
     mlt_vals = (mlt_bins[:-1] + mlt_bins[1:]) / 2
@@ -164,7 +160,7 @@ def process_dataset(start_year, end_year, mlat_bins, mlt_bins):
     years = np.arange(start_year, end_year, np.timedelta64(1, 'Y'))
     t0 = time.time()
     for year in years:
-        process_year(year, config.madrigal_lat, config.madrigal_lon, bins)
+        process_year(year, year + 1, config.madrigal_lat, config.madrigal_lon, bins)
     tf = time.time()
     print((tf - t0) / 60)
     # make grid file

@@ -36,10 +36,23 @@ def plot_swarm_troughs_polar(ax, troughs):
             ax.plot((trough[['e1_mlt', 'e2_mlt']] - 6) * np.pi / 12, 90 - trough[['e1_mlat', 'e2_mlat']], 'r-')
 
 
-def polar_pcolormesh(ax, mlat, mlt, value, **kwargs):
+def polar_pcolormesh(ax, mlat, mlt, value, cs='mlt', **kwargs):
     r = 90 - mlat
-    t = (mlt - 6) * np.pi / 12
+    if cs == 'mlt':
+        t = (mlt - 6) * np.pi / 12
+    elif cs == 'mlon':
+        t = mlt * np.pi / 180
+    else:
+        raise Exception("Not recognized coordinate system, choose 'mlon' or 'mlt'")
     return ax.pcolormesh(t - np.pi/360, r + .5, value, shading='auto', **kwargs)
+
+
+def plot_mlon_lines(ax, ssmlon, mlons=np.arange(0, 360, 45)):
+    for mlon in mlons:
+        mlt = ((mlon - ssmlon + 180) / 15) % 24
+        theta = np.pi * (mlt - 6) / 12
+        ax.plot([theta, theta], [0, 60], '--', color='grey')
+        ax.annotate(str(mlon), (theta, 58))
 
 
 def prepare_swarm_line_plot(t, swarm_segments, swarm_troughs, mlat_profs, x_profs):
@@ -53,14 +66,26 @@ def prepare_swarm_line_plot(t, swarm_segments, swarm_troughs, mlat_profs, x_prof
     return troughs, segments, m_p, x_p
 
 
+def plot_arb(ax, mlt, arb_mlat):
+    theta = np.pi * (mlt - 6) / 12
+    r = 90 - arb_mlat
+    ax.plot(theta, r, 'k--')
+
+
 def plot_all(polar_ax, line_ax, mlat_grid, mlt_grid, tec, x, swarm_troughs, tec_trough, swarm_segments, mlat_profs,
-             x_profs):
+             x_profs, ssmlon, arb=None):
     polar_pcolormesh(polar_ax[0], mlat_grid, mlt_grid, tec, vmin=0, vmax=20)
     plot_swarm_troughs_polar(polar_ax[0], swarm_troughs)
+    plot_mlon_lines(polar_ax[0], ssmlon)
     polar_pcolormesh(polar_ax[1], mlat_grid, mlt_grid, x, vmin=-.5, vmax=.5, cmap='coolwarm')
     plot_swarm_troughs_polar(polar_ax[1], swarm_troughs)
+    plot_mlon_lines(polar_ax[1], ssmlon)
     polar_pcolormesh(polar_ax[2], mlat_grid, mlt_grid, tec_trough, vmin=0, vmax=1, cmap='Blues')
     plot_swarm_troughs_polar(polar_ax[2], swarm_troughs)
+    plot_mlon_lines(polar_ax[2], ssmlon)
+    if arb is not None:
+        plot_arb(polar_ax[0], mlt_grid[0], arb)
+        plot_arb(polar_ax[1], mlt_grid[0], arb)
     format_polar_mag_ax(polar_ax)
 
     for i, (segment, ax, mlat_prof, x_prof) in enumerate(zip(swarm_segments, line_ax.flatten(), mlat_profs, x_profs)):

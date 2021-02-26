@@ -12,110 +12,28 @@ from ttools import utils, config
 
 
 OMNI_COLUMNS = (
-    "rotation_number",
-    "imf_id",
-    "sw_id",
-    "imf_n",
-    "plasma_n",
-    "b_mag",
-    "b_vector_mag",
-    "b_vector_lat_avg",
-    "b_vector_lon_avg",
-    "bx",
-    "by_gse",
-    "bz_gse",
-    "by_gsm",
-    "bz_gsm",
-    "b_mag_std",
-    "b_vector_mag_std",
-    "bx_std",
-    "by_std",
-    "bz_std",
-    "proton_temp",
-    "proton_density",
-    "plasma_speed",
-    "plasma_lon_angle",
-    "plasma_lat_angle",
-    "na_np_ratio",
-    "flow_pressure",
-    "temp_std",
-    "density_std",
-    "speed_std",
-    "phi_v_std",
-    "theta_v_std",
-    "na_np_ratio_std",
-    "e_field",
-    "plasma_beta",
-    "alfven_mach_number",
-    "kp",
-    "r",
-    "dst",
-    "ae",
-    "proton_flux_1",
-    "proton_flux_2",
-    "proton_flux_4",
-    "proton_flux_10",
-    "proton_flux_30",
-    "proton_flux_60",
-    "proton_flux_flag",
-    "ap",
-    "f107",
-    "pcn",
-    "al",
-    "au",
-    "magnetosonic_mach_number",
+    "rotation_number", "imf_id", "sw_id", "imf_n", "plasma_n", "b_mag", "b_vector_mag", "b_vector_lat_avg",
+    "b_vector_lon_avg", "bx", "by_gse", "bz_gse", "by_gsm", "bz_gsm", "b_mag_std", "b_vector_mag_std", "bx_std",
+    "by_std", "bz_std", "proton_temp", "proton_density", "plasma_speed", "plasma_lon_angle", "plasma_lat_angle",
+    "na_np_ratio", "flow_pressure", "temp_std", "density_std", "speed_std", "phi_v_std", "theta_v_std",
+    "na_np_ratio_std", "e_field", "plasma_beta", "alfven_mach_number", "kp", "r", "dst", "ae", "proton_flux_1",
+    "proton_flux_2", "proton_flux_4", "proton_flux_10", "proton_flux_30", "proton_flux_60", "proton_flux_flag", "ap",
+    "f107", "pcn", "al", "au", "magnetosonic_mach_number"
 )
 
 ALL_SWARM_FIELDS = (
-    'Latitude',
-    'Longitude',
-    'Height',
-    'Radius',
-    'SZA',
-    'SAz',
-    'ST',
-    'Diplat',
-    'Diplon',
-    'MLat',
-    'MLT',
-    'AACGMLat',
-    'AACGMLon',
-    'n',
-    'Te_hgn',
-    'Te_lgn',
-    'T_elec',
-    'Vs_hgn',
-    'Vs_lgn',
-    'U_SC',
-    'Flagbits',
+    'Latitude', 'Longitude', 'Height', 'Radius', 'SZA', 'SAz', 'ST', 'Diplat', 'Diplon', 'MLat', 'MLT', 'AACGMLat',
+    'AACGMLon', 'n', 'Te_hgn', 'Te_lgn', 'T_elec', 'Vs_hgn', 'Vs_lgn', 'U_SC', 'Flagbits'
 )
 
 
 SWARM_FIELDS_LESS_MAG_COORDS = (
-    'Height',
-    'Radius',
-    'SZA',
-    'SAz',
-    'ST',
-    'n',
-    'Te_hgn',
-    'Te_lgn',
-    'T_elec',
-    'Vs_hgn',
-    'Vs_lgn',
-    'U_SC',
-    'Flagbits',
+    'Height', 'Radius', 'SZA', 'SAz', 'ST', 'n', 'Te_hgn', 'Te_lgn', 'T_elec', 'Vs_hgn', 'Vs_lgn', 'U_SC', 'Flagbits'
 )
 
 
 SWARM_NEW_COORDS = (
-    'apex_lat',
-    'apex_lon',
-    'qd_lat',
-    'qd_lon',
-    'mlt',
-    'lat',
-    'lon',
+    'apex_lat', 'apex_lon', 'qd_lat', 'qd_lon', 'mlt', 'lat', 'lon'
 )
 
 
@@ -441,6 +359,61 @@ def open_tec_file(fn):
         ssmlon = f['ssmlon'][()]
     print(f"Opened TEC file: {fn}, size: {tec.shape}")
     return tec, times, ssmlon, n, std
+
+
+def get_arb_data(start_date, end_date, dir=config.arb_dir):
+    """Gets auroral boundary mlat and timestamps
+
+    Parameters
+    ----------
+    start_date, end_date: np.datetime64
+    dir: str
+
+    Returns
+    -------
+    arb_mlat, times: numpy.ndarray
+    """
+    dt = np.timedelta64(1, 'h')
+    dt_sec = dt.astype('timedelta64[s]').astype(int)
+    start_date = (np.ceil(start_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
+    end_date = (np.ceil(end_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
+    ref_times = np.arange(start_date, end_date, dt)
+    ref_times_ut = ref_times.astype('datetime64[s]').astype(int)
+    arb_mlat = []
+    uts = []
+    file_dates = np.unique(ref_times.astype('datetime64[M]'))
+    file_dates = utils.decompose_datetime64(file_dates)
+    for i in range(file_dates.shape[0]):
+        y = file_dates[i, 0]
+        m = file_dates[i, 1]
+        fn = os.path.join(dir, f"{y:04d}_{m:02d}_arb.h5")
+        mlat, ut = open_arb_file(fn)
+        arb_mlat.append(mlat)
+        uts.append(ut)
+    uts = np.concatenate(uts)
+    arb_mlat = np.concatenate(arb_mlat, axis=0)
+    int_arb_mlat = np.empty((ref_times.shape[0], config.mlt_vals.shape[0]))
+    for i in range(config.mlt_vals.shape[0]):
+        int_arb_mlat[:, i] = np.interp(ref_times_ut, uts, arb_mlat[:, i])
+    return int_arb_mlat, ref_times
+
+
+def open_arb_file(fn):
+    """Open a monthly auroral boundary file, return its data
+
+    Parameters
+    ----------
+    fn: str
+
+    Returns
+    -------
+    arb_mlat, times: numpy.ndarray
+    """
+    with h5py.File(fn, 'r') as f:
+        arb_mlat = f['mlat'][()]
+        times = f['times'][()]
+    print(f"Opened ARB file: {fn}, size: {arb_mlat.shape}")
+    return arb_mlat, times
 
 
 def write_h5(fn, **kwargs):

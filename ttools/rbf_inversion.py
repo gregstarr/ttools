@@ -25,7 +25,6 @@ trough = rbf_inversion.postprocess(initial_trough)
 import numpy as np
 import bottleneck as bn
 import cvxpy as cp
-import warnings
 import pandas
 import multiprocessing
 
@@ -33,8 +32,9 @@ from skimage.util import view_as_windows
 from skimage import measure
 from sklearn.metrics.pairwise import rbf_kernel
 from scipy.sparse import csr_matrix
+from scipy.interpolate import RectSphereBivariateSpline
 
-from ttools import utils, trough_model, config, io
+from ttools import utils, trough_model, config, convert
 
 
 def extract_patches(arr, patch_shape, step=1):
@@ -135,20 +135,31 @@ def get_tv_matrix(im_shape, hw=1, vw=1):
 
 
 def get_optimization_args(x, times, mlt_vals=config.mlt_vals, mlat_grid=config.mlat_grid, model_weight_max=25,
-                          rbf_bw=1, tv_hw=2, tv_vw=1, l2_weight=.1, tv_weight=.06):
+                          rbf_bw=1, tv_hw=2, tv_vw=1, l2_weight=.1, tv_weight=.06, prior_order=1, prior='empirical',
+                          arb=None, arb_offset=-1):
     all_args = []
-    # get deminov model
-    ut = times.astype('datetime64[s]').astype(float)
-    model_mlat = trough_model.get_model(ut, mlt_vals)
     # get rbf basis matrix
     basis = get_rbf_matrix(x.shape[1:], rbf_bw)
     # get tv matrix
     tv = get_tv_matrix(x.shape[1:], tv_hw, tv_vw) * tv_weight
+    if prior == 'empirical_model':
+        # get deminov model
+        ut = times.astype('datetime64[s]').astype(float)
+        model_mlat = trough_model.get_model(ut, mlt_vals)
+    elif prior == 'auroral_boundary':
+        model_mlat = arb + arb_offset
+    else:
+        raise Exception("Invalid prior name")
     for i in range(times.shape[0]):
         # l2 norm cost away from model
-        l2 = (mlat_grid - model_mlat[i, :]) ** 2
-        l2 /= (l2.max() / model_weight_max)
-        l2 += 1
+        if prior_order == 1:
+            l2 = abs(mlat_grid - model_mlat[i, :])
+        elif prior_order == 2:
+            l2 = (mlat_grid - model_mlat[i, :]) ** 2
+        else:
+            raise Exception("Invalid prior order")
+        l2 -= l2.min()
+        l2 = (model_weight_max - 1) * l2 / l2.max() + 1
         l2 *= l2_weight
         fin_mask = np.isfinite(x[i].ravel())
         args = (cp.Variable(x.shape[1] * x.shape[2]), basis[fin_mask, :], x[i].ravel()[fin_mask], tv, l2.ravel(),
@@ -187,6 +198,21 @@ def run_multiple(args, parallel=True):
     return np.stack(results, axis=0)
 
 
+def get_artifacts(mlt_grid, ssmlon, artifact_key, fn="E:\\tec_data\\tec_artifact.npz"):
+    artifacts = np.load(fn)
+    mlon = convert.mlt_to_mlon_sub(mlt_grid[None, :, :], ssmlon[:, None, None]) * np.pi / 180
+    comlat = (90 - config.mlat_grid) * np.pi / 180
+
+    sp = RectSphereBivariateSpline((90 - artifacts['mlat_vals'][::-1]) * np.pi / 180,
+                                   artifacts['mlon_vals'] * np.pi / 180,
+                                   artifacts[artifact_key][::-1, :])
+
+    corr = np.empty_like(mlon)
+    for i in range(ssmlon.shape[0]):
+        corr[i] = sp(comlat.ravel(), mlon[i].ravel(), grid=False).reshape(comlat.shape)[::-1, :]
+    return corr
+
+
 def fix_boundaries(labels):
     fixed = labels.copy()
     while True:
@@ -201,7 +227,7 @@ def fix_boundaries(labels):
     return fixed
 
 
-def postprocess(initial_trough, perimeter_th=50, area_th=1):
+def postprocess(initial_trough, perimeter_th=50, area_th=1, arb=None):
     trough = initial_trough.copy()
     for t in range(trough.shape[0]):
         tmap = trough[t]
@@ -212,18 +238,25 @@ def postprocess(initial_trough, perimeter_th=50, area_th=1):
         for i, r in props[error_mask].iterrows():
             tmap[labeled == r['label']] = 0
         trough[t] = tmap
+    if arb is not None:
+        for t in range(trough.shape[0]):
+            trough[t] *= (config.mlat_grid < arb[t, None, :])
     return trough
 
 
 def get_tec_troughs(tec, input_times, bg_est_shape=(3, 15, 15), model_weight_max=20, rbf_bw=1, tv_hw=1, tv_vw=1,
-                    l2_weight=.1, tv_weight=.05, perimeter_th=50, area_th=20):
+                    l2_weight=.1, tv_weight=.05, perimeter_th=50, area_th=20, artifact_correction=None,
+                    arb=None, prior_order=1, prior='empirical', prior_arb_offset=-1):
     # preprocess
     print("Preprocessing TEC data")
     x, times = preprocess_interval(tec, input_times, bg_est_shape=bg_est_shape)
+    if artifact_correction is not None:
+        x -= artifact_correction
     # setup optimization
     print("Setting up inversion optimization")
     args = get_optimization_args(x, times, model_weight_max=model_weight_max, rbf_bw=rbf_bw, tv_hw=tv_hw, tv_vw=tv_vw,
-                                 l2_weight=l2_weight, tv_weight=tv_weight)
+                                 l2_weight=l2_weight, tv_weight=tv_weight, prior_order=prior_order, prior=prior,
+                                 arb=arb, arb_offset=prior_arb_offset)
     # run optimization
     print("Running inversion optimization")
     model_output = run_multiple(args, parallel=config.PARALLEL)
@@ -231,5 +264,5 @@ def get_tec_troughs(tec, input_times, bg_est_shape=(3, 15, 15), model_weight_max
     initial_trough = model_output >= 1
     # postprocess
     print("Postprocessing inversion results")
-    trough = postprocess(initial_trough, perimeter_th, area_th)
+    trough = postprocess(initial_trough, perimeter_th, area_th, arb)
     return trough, x
