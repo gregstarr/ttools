@@ -135,8 +135,8 @@ def get_tv_matrix(im_shape, hw=1, vw=1):
 
 
 def get_optimization_args(x, times, mlt_vals=config.mlt_vals, mlat_grid=config.mlat_grid, model_weight_max=25,
-                          rbf_bw=1, tv_hw=2, tv_vw=1, l2_weight=.1, tv_weight=.06, prior_order=1, prior='empirical',
-                          arb=None, arb_offset=-1):
+                          rbf_bw=1, tv_hw=2, tv_vw=1, l2_weight=.1, tv_weight=.06, prior_order=1,
+                          prior='empirical_model', arb=None, arb_offset=-1):
     all_args = []
     # get rbf basis matrix
     basis = get_rbf_matrix(x.shape[1:], rbf_bw)
@@ -246,7 +246,7 @@ def postprocess(initial_trough, perimeter_th=50, area_th=1, arb=None):
 
 def get_tec_troughs(tec, input_times, bg_est_shape=(3, 15, 15), model_weight_max=20, rbf_bw=1, tv_hw=1, tv_vw=1,
                     l2_weight=.1, tv_weight=.05, perimeter_th=50, area_th=20, artifact_correction=None,
-                    arb=None, prior_order=1, prior='empirical', prior_arb_offset=-1):
+                    arb=None, prior_order=1, prior='empirical_model', prior_arb_offset=-1):
     # preprocess
     print("Preprocessing TEC data")
     x, times = preprocess_interval(tec, input_times, bg_est_shape=bg_est_shape)

@@ -21,12 +21,11 @@ if __name__ == "__main__":
         'artifact_key': '9',
         'auroral_boundary': True,
         'prior_order': 1,
-        'prior': 'empirical',
+        'prior': 'empirical_model',
         'prior_arb_offset': -1
     }
     t0 = time.time()
     results = compare.run_n_random_days(100, **params, make_plots=True, plot_dir="E:\\temp_plots")
-    diffs = compare.get_diffs(results, bad_mlon_range=[130, 260])
     stats = compare.process_results(results, bad_mlon_range=[130, 260])
     for k, v in stats.items():
         print(k, v)
