@@ -59,23 +59,13 @@ def test_postprocess():
     weird_good_trough = (abs(config.mlat_grid - 40) < 5) * (abs(config.mlt_grid - 9) <= 2.5)
     weird_good_trough += (abs(config.mlat_grid - 34) <= 2) * (abs(config.mlt_grid) > 11.3)
     weird_good_trough += (abs(config.mlat_grid - 44) <= 2) * (abs(config.mlt_grid) > 11.3)
-    initial_trough = good_trough + small_reject + boundary_good_trough + boundary_bad_trough + weird_good_trough
-    trough = rbf_inversion.postprocess(initial_trough[None], perimeter_th=50)[0]
+    high_trough = (abs(config.mlat_grid - 80) < 2) * (abs(config.mlt_grid + 6) <= 3)
+    arb = np.ones((1, 180)) * 70
+    initial_trough = good_trough + small_reject + boundary_good_trough + boundary_bad_trough + weird_good_trough + high_trough
+    trough = rbf_inversion.postprocess(initial_trough[None], perimeter_th=50, arb=arb)[0]
     assert trough[good_trough].all()
     assert not trough[small_reject].any()
     assert trough[boundary_good_trough].all()
     assert not trough[boundary_bad_trough].any()
     assert trough[weird_good_trough].all()
-
-
-def test_background_even():
-    pass
-
-
-def test_rbf_matrix():
-    pass
-
-
-def test_tv_matrix():
-    pass
-
+    assert not trough[high_trough].any()

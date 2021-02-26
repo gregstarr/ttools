@@ -114,6 +114,12 @@ def test_get_closest_segment(swarm_data_dir):
         assert np.all(data['apex_lat'][fin_mask][start:stop] < 75)
         assert data['apex_lat'][fin_mask][stop] < 45
 
+    starts, stops = swarm.get_closest_segment(times[fin_mask], data['apex_lat'][fin_mask], tec_times, 75)
+    for start, stop in zip(starts, stops):
+        assert np.all(data['apex_lat'][fin_mask][start:stop] >= 75)
+        assert data['apex_lat'][fin_mask][start - 1] < 75
+        assert data['apex_lat'][fin_mask][stop] < 75
+
 
 def test_find_troughs_in_segment_nominal():
     threshold = -1

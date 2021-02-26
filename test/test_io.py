@@ -1,6 +1,9 @@
 import numpy as np
 import os
 import apexpy
+import tempfile
+import yaml
+import h5py
 
 from ttools import io, config, utils, convert
 
@@ -87,13 +90,28 @@ def test_get_arb_data():
     pass
 
 
-def test_open_arb_file():
-    pass
-
-
 def test_write_h5():
-    pass
+    data1 = np.random.rand(10)
+    data2 = np.random.rand(10)
+    data3 = np.random.rand(10, 10, 10)
+    with tempfile.TemporaryDirectory() as tmpdr:
+        fn = os.path.join(tmpdr, "test.yml")
+        io.write_h5(fn, data1=data1, data2=data2, data3=data3)
+        assert os.path.exists(fn)
+        with h5py.File(fn) as f:
+            assert np.all(f['data1'][()] == data1)
+            assert np.all(f['data2'][()] == data2)
+            assert np.all(f['data3'][()] == data3)
 
 
 def test_write_yaml():
-    pass
+    with tempfile.TemporaryDirectory() as tmpdr:
+        fn = os.path.join(tmpdr, "test.yml")
+        io.write_yaml(fn, val_1=1, val_2='test', val_3=[1, 2, 3])
+        assert os.path.exists(fn)
+        with open(fn) as f:
+            out = yaml.safe_load(f)
+        assert out['val_1'] == 1
+        assert out['val_2'] == 'test'
+        assert out['val_3'] == [1, 2, 3]
+

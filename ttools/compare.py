@@ -130,7 +130,7 @@ def process_results(results, good_mlon_range=None, bad_mlon_range=None):
     tnr = tn / (tn + fp)
     fnr = 1 - tnr
 
-    diffs = get_diffs(results, good_mlon_range, bad_mlon_range)
+    diffs, mlon_mask = get_diffs(results, good_mlon_range, bad_mlon_range)
     pwall_diff_mean = diffs['pwall_diff'].mean()
     pwall_diff_std = diffs['pwall_diff'].std()
     ewall_diff_mean = diffs['ewall_diff'].mean()
@@ -143,7 +143,7 @@ def process_results(results, good_mlon_range=None, bad_mlon_range=None):
     }
 
     if good_mlon_range is not None or bad_mlon_range is not None:
-        tn, fn, fp, tp = confusion_matrix(results['tec_trough'][diffs['mlon_mask']], results['swarm_trough'][diffs['mlon_mask']]).ravel()
+        tn, fn, fp, tp = confusion_matrix(results['tec_trough'][mlon_mask], results['swarm_trough'][mlon_mask]).ravel()
         acc = (tn + tp) / (tn + fn + fp + tp)
         tpr = tp / (tp + fn)
         tnr = tn / (tn + fp)
@@ -176,7 +176,7 @@ def get_diffs(results, good_mlon_range=None, bad_mlon_range=None):
             mlon_mask = ~((results['mlon'] >= bad_mlon_range[0]) & (results['mlon'] <= bad_mlon_range[1]))
         statistics['mlon_mask'] = mlon_mask[compare_mask]
 
-    return pandas.DataFrame(statistics)
+    return pandas.DataFrame(statistics), mlon_mask
 
 
 PARAM_SAMPLING = {
