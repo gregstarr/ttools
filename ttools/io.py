@@ -104,20 +104,20 @@ def get_borovsky_data(fn="E:\\borovsky_2020_data.txt"):
     return datetimes.astype(int), data[:, 4:]
 
 
-def get_madrigal_data(start_date, end_date, dir=None):
+def get_madrigal_data(start_date, end_date, data_dir=None):
     """Gets madrigal TEC and timestamps assuming regular sampling. Fills in missing time steps.
 
     Parameters
     ----------
     start_date, end_date: np.datetime64
-    dir: str
+    data_dir: str
 
     Returns
     -------
     tec, times: numpy.ndarray
     """
-    if dir is None:
-        dir = config.madrigal_dir
+    if data_dir is None:
+        data_dir = config.madrigal_dir
     dt = np.timedelta64(5, 'm')
     dt_sec = dt.astype('timedelta64[s]').astype(int)
     start_date = (np.ceil(start_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
@@ -132,7 +132,7 @@ def get_madrigal_data(start_date, end_date, dir=None):
         m = file_dates[i, 1]
         d = file_dates[i, 2]
         try:
-            fn = glob.glob(os.path.join(dir, f"gps{y - 2000:02d}{m:02d}{d:02d}g.*.hdf5"))[-1]
+            fn = glob.glob(os.path.join(data_dir, f"gps{y - 2000:02d}{m:02d}{d:02d}g.*.hdf5"))[-1]
         except IndexError:
             print(f"{y}-{m}-{d} madrigal file doesn't exist")
             continue
@@ -307,20 +307,20 @@ def open_swarm_coords_file(fn):
     return coords
 
 
-def get_tec_data(start_date, end_date, dir=None):
+def get_tec_data(start_date, end_date, data_dir=None):
     """Gets TEC and timestamps
 
     Parameters
     ----------
     start_date, end_date: np.datetime64
-    dir: str
+    data_dir: str
 
     Returns
     -------
     tec, times: numpy.ndarray
     """
-    if dir is None:
-        dir = config.tec_dir
+    if data_dir is None:
+        data_dir = config.tec_dir
     dt = np.timedelta64(1, 'h')
     dt_sec = dt.astype('timedelta64[s]').astype(int)
     start_date = (np.ceil(start_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
@@ -335,7 +335,7 @@ def get_tec_data(start_date, end_date, dir=None):
     for i in range(file_dates.shape[0]):
         y = file_dates[i, 0]
         m = file_dates[i, 1]
-        fn = os.path.join(dir, "{year:04d}_{month:02d}_tec.h5".format(year=y, month=m))
+        fn = os.path.join(data_dir, "{year:04d}_{month:02d}_tec.h5".format(year=y, month=m))
         t, ut, ss, n, std = open_tec_file(fn)
         in_time_mask = np.in1d(ut, ref_times_ut)
         tec.append(t[in_time_mask])
@@ -365,20 +365,20 @@ def open_tec_file(fn):
     return tec, times, ssmlon, n, std
 
 
-def get_arb_data(start_date, end_date, dir=None):
+def get_arb_data(start_date, end_date, data_dir=None):
     """Gets auroral boundary mlat and timestamps
 
     Parameters
     ----------
     start_date, end_date: np.datetime64
-    dir: str
+    data_dir: str
 
     Returns
     -------
     arb_mlat, times: numpy.ndarray
     """
-    if dir is None:
-        dir = config.arb_dir
+    if data_dir is None:
+        data_dir = config.arb_dir
     dt = np.timedelta64(1, 'h')
     dt_sec = dt.astype('timedelta64[s]').astype(int)
     start_date = (np.ceil(start_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
@@ -392,7 +392,7 @@ def get_arb_data(start_date, end_date, dir=None):
     for i in range(file_dates.shape[0]):
         y = file_dates[i, 0]
         m = file_dates[i, 1]
-        fn = os.path.join(dir, f"{y:04d}_{m:02d}_arb.h5")
+        fn = os.path.join(data_dir, f"{y:04d}_{m:02d}_arb.h5")
         mlat, ut = open_arb_file(fn)
         arb_mlat.append(mlat)
         uts.append(ut)

@@ -201,12 +201,16 @@ def run_multiple(args, parallel=True):
     return np.stack(results, axis=0)
 
 
-def get_artifacts(mlt_grid, ssmlon, artifact_key, fn=None):
+def get_artifacts(ssmlon, artifact_key, fn=None, mlt_grid=None, mlat_grid=None):
     if fn is None:
         fn = config.artifact_file
+    if mlt_grid is None:
+        mlt_grid = config.mlt_grid
+    if mlat_grid is None:
+        mlat_grid = config.mlat_grid
     artifacts = np.load(fn)
     mlon = convert.mlt_to_mlon_sub(mlt_grid[None, :, :], ssmlon[:, None, None]) * np.pi / 180
-    comlat = (90 - config.mlat_grid) * np.pi / 180
+    comlat = (90 - mlat_grid) * np.pi / 180
 
     sp = RectSphereBivariateSpline((90 - artifacts['mlat_vals'][::-1]) * np.pi / 180,
                                    artifacts['mlon_vals'] * np.pi / 180,
@@ -214,7 +218,7 @@ def get_artifacts(mlt_grid, ssmlon, artifact_key, fn=None):
 
     corr = np.empty_like(mlon)
     for i in range(ssmlon.shape[0]):
-        corr[i] = sp(comlat.ravel(), mlon[i].ravel(), grid=False).reshape(comlat.shape)[::-1, :]
+        corr[i] = sp(comlat.ravel(), mlon[i].ravel(), grid=False).reshape(comlat.shape)
     return corr
 
 

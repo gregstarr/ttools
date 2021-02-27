@@ -19,7 +19,7 @@ def update(_base_dir="E:\\"):
 
     # processed TEC data directory
     tec_dir = os.path.join(base_dir, "tec_data")
-    artifact_file = os.path.join(tec_dir, 'artifacts.npz')
+    artifact_file = os.path.join(tec_dir, 'tec_artifact.npz')
 
     # processed auroral boundary data directory
     arb_dir = os.path.join(base_dir, "auroral_boundary")
@@ -36,6 +36,7 @@ def update(_base_dir="E:\\"):
         mlt_grid, mlat_grid = np.meshgrid(mlt_vals, mlat_vals)
     else:
         print("GRID FILE NOT FOUND")
+        mlt_vals = mlat_vals = mlt_grid = mlat_grid = None
 
     kp_file = os.path.join(base_dir, "2000_2020_kp_ap.txt")
 

@@ -69,3 +69,42 @@ def test_postprocess():
     assert not trough[boundary_bad_trough].any()
     assert trough[weird_good_trough].all()
     assert not trough[high_trough].any()
+
+
+def test_get_optimization_args():
+    """var, basis, x, tv, l2, times, shp"""
+    T = 3
+    D = 10
+    x = np.random.randn(T, D, D)
+    x[0, :2, :2] = np.nan
+    times = np.datetime64("2000") + np.arange(T) * np.timedelta64(1, 'h')
+    mlt_vals = np.arange(D)
+    mlat_grid = np.arange(D)[:, None] * np.ones((1, D))
+    arb = np.ones((T, D)) * 7.5
+    args = rbf_inversion.get_optimization_args(x, times, mlt_vals, mlat_grid, 10, .5, .5, .5, .5, .5, 1, 'empirical_model', arb, 0)
+    var, basis, x_out, tv, l2, t, shp = args[0]
+    assert len(args) == T
+    assert basis.shape == (D ** 2 - 4, D ** 2)
+    assert np.all(x_out == x[0][np.isfinite(x[0])])
+    assert np.all(np.diag(tv.toarray()) == 1)
+    assert tv.shape == (D ** 2, D ** 2)
+    assert l2.min() == .5
+    assert l2.max() == 5
+    assert shp == (D, D)
+    args2 = rbf_inversion.get_optimization_args(x, times, mlt_vals, mlat_grid, 10, .5, .5, .5, .5, .5, 2, 'empirical_model', arb, 0)
+    assert np.mean(args2[0][4] != l2) > .75
+    args3 = rbf_inversion.get_optimization_args(x, times, mlt_vals, mlat_grid, 10, .5, .5, .5, .5, .5, 1, 'auroral_boundary', arb, 0)
+    l = abs(mlat_grid - arb[0]).ravel()
+    l -= l.min()
+    l = (10 - 1) * l / l.max() + 1
+    l *= .5
+    assert np.all(l == args3[0][4])
+
+
+def test_artifacts():
+    """Can I verify that the interpolation is happening properly?"""
+    mlt_grid = np.arange(-12, 12, 24/360)[None, :] * np.ones((60, 1))
+    mlat_grid = np.arange(30, 90)[:, None] * np.ones((1, 360))
+    corr = rbf_inversion.get_artifacts(np.ones(10) * 180, '9', mlt_grid=mlt_grid, mlat_grid=mlat_grid)
+    artifacts = np.load(config.artifact_file)
+    assert np.allclose(np.roll(artifacts['9'], 180, axis=1), corr[0])

@@ -87,7 +87,11 @@ def test_get_tec_data():
 
 
 def test_get_arb_data():
-    pass
+    start_date = np.datetime64("2012-06-10T10:10:10")
+    end_date = np.datetime64("2012-06-10T20:30:01")
+    arb, times = io.get_arb_data(start_date, end_date)
+    correct_times = np.datetime64("2012-06-10T11:00:00") + np.arange(10) * np.timedelta64(1, 'h')
+    assert np.all(times.astype('datetime64[s]') == correct_times)
 
 
 def test_write_h5():

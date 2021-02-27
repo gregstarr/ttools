@@ -120,7 +120,7 @@ def get_mag_grid(ref_lat, ref_lon, converter):
     return mlat, mlon
 
 
-def process_year(start_date, end_date, ref_lat, ref_lon, bins):
+def process_year(start_date, end_date, ref_lat, ref_lon, bins, output_dir=None):
     """Processes monthly madrigal data and writes to files.
 
     Parameters
@@ -132,6 +132,8 @@ def process_year(start_date, end_date, ref_lat, ref_lon, bins):
         longitude values of madrigal lat-lon grid
     bins: list[numpy.ndarray[float] (X + 1, ), numpy.ndarray[float] (Y + 1, )]
     """
+    if output_dir is None:
+        output_dir = config.tec_dir
     apex_date = utils.datetime64_to_datetime(start_date)
     converter = apexpy.Apex(date=apex_date)
     mlat, mlon = get_mag_grid(ref_lat, ref_lon, converter)
@@ -140,7 +142,7 @@ def process_year(start_date, end_date, ref_lat, ref_lon, bins):
         times, tec, ssmlon, n, std = process_month(month, month + 1, mlat, mlon, converter, bins)
         if np.isfinite(tec).any():
             ymd = utils.decompose_datetime64(month)
-            fn = os.path.join(dir, "{year:04d}_{month:02d}_tec.h5".format(year=ymd[0, 0], month=ymd[0, 1]))
+            fn = os.path.join(output_dir, "{year:04d}_{month:02d}_tec.h5".format(year=ymd[0, 0], month=ymd[0, 1]))
             io.write_h5(fn, times=times.astype('datetime64[s]').astype(int), tec=tec, n=n, std=std, ssmlon=ssmlon)
         else:
             print(f"No data for month: {month}, not writing file")
