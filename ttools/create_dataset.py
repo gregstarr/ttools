@@ -93,7 +93,7 @@ def process_month(start_date, end_date, mlat_grid, mlon_grid, converter, bins, m
     if not isinstance(madrigal_dir, str):
         madrigal_dir = config.madrigal_dir
     print(start_date, end_date)
-    tec, ts = io.get_madrigal_data(start_date, end_date, dir=madrigal_dir)
+    tec, ts = io.get_madrigal_data(start_date, end_date, data_dir=madrigal_dir)
     print("Converting coordinates")
     mlt, ssmlon = convert.mlon_to_mlt_array(mlon_grid[None, :, :], ts[:, None, None], converter, return_ssmlon=True)
     mlat = mlat_grid[None, :, :] * np.ones((ts.shape[0], 1, 1))

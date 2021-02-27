@@ -67,7 +67,7 @@ def run_single_day(date, bg_est_shape=(3, 15, 15), model_weight_max=20, rbf_bw=1
     artifacts = None
     arb = None
     if artifact_key is not None:
-        artifacts = rbf_inversion.get_artifacts(mlt_grid, ssmlon, artifact_key)
+        artifacts = rbf_inversion.get_artifacts(ssmlon, artifact_key)
     if auroral_boundary:
         arb, _ = io.get_arb_data(start_time, end_time)
     tec_troughs, x = rbf_inversion.get_tec_troughs(tec, times, bg_est_shape, model_weight_max, rbf_bw, tv_hw, tv_vw,
