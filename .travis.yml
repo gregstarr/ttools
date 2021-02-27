@@ -4,6 +4,9 @@ python:
   - "3.6"
   - "3.7"
   - "3.8"
+
+env:
+  - GDRIVE_ID=1aK-Vwa-w1xUXcqLyXG7Bvi51qdE0gyP5
   
 addons:
   apt:
@@ -26,7 +29,7 @@ install:
   - python -m pip install --upgrade pip
   - pip install coveralls gdown
   - cd test
-  - gdown https://drive.google.com/uc?id=1aK-Vwa-w1xUXcqLyXG7Bvi51qdE0gyP5
+  - "gdown https://drive.google.com/uc?id=$GDRIVE_ID"
   - unzip ttools_data
   - cd ..
   
