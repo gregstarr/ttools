@@ -48,10 +48,10 @@ def test_get_madrigal_missing(madrigal_data_dir):
 
 
 def test_get_swarm_data():
-    start_date = np.datetime64("2019-12-26T10:10:10.001")
-    end_date = np.datetime64("2019-12-26T10:30:01.000")
+    start_date = np.datetime64("2015-10-07T10:10:10.001")
+    end_date = np.datetime64("2015-10-07T10:30:01.000")
     data, times = io.get_swarm_data(start_date, end_date, 'C')
-    correct_times = np.arange(np.datetime64("2019-12-26T10:10:10.5"), end_date, np.timedelta64(500, 'ms'))
+    correct_times = np.arange(np.datetime64("2015-10-07T10:10:10.5"), end_date, np.timedelta64(500, 'ms'))
     assert np.all(times == correct_times)
 
     converter = apexpy.Apex(utils.datetime64_to_datetime(times[0]))
@@ -63,11 +63,11 @@ def test_get_swarm_data():
 
 
 def test_get_swarm_fill():
-    start_date = np.datetime64("2019-12-26T22:22:22.001")
-    end_date = np.datetime64("2019-12-27T02:00:00.000")
+    start_date = np.datetime64("2015-10-07T22:22:22.001")
+    end_date = np.datetime64("2015-10-08T02:00:00.000")
     data, times = io.get_swarm_data(start_date, end_date, 'C')
-    correct_times = np.arange(np.datetime64("2019-12-26T22:22:22.5"), end_date, np.timedelta64(500, 'ms'))
-    no_data_time = np.datetime64("2019-12-27T00:00:00.000")
+    correct_times = np.arange(np.datetime64("2015-10-07T22:22:22.5"), end_date, np.timedelta64(500, 'ms'))
+    no_data_time = np.datetime64("2015-10-08T00:00:00.000")
     assert np.all(times == correct_times)
     assert np.all(np.isnan(data['n'][times >= no_data_time]))
 
@@ -75,10 +75,10 @@ def test_get_swarm_fill():
 def test_get_tec_data():
     """Test that the correct timestamps are returned, correct data is at those timestamps, correct subsolar point mlon
     """
-    start_date = np.datetime64("2012-06-10T10:10:10")
-    end_date = np.datetime64("2012-06-10T20:30:01")
+    start_date = np.datetime64("2015-10-10T10:10:10")
+    end_date = np.datetime64("2015-10-10T20:30:01")
     tec, times, ssmlon, n = io.get_tec_data(start_date, end_date)
-    correct_times = np.datetime64("2012-06-10T11:00:00") + np.arange(10) * np.timedelta64(1, 'h')
+    correct_times = np.datetime64("2015-10-10T11:00:00") + np.arange(10) * np.timedelta64(1, 'h')
     assert np.all(times.astype('datetime64[s]') == correct_times)
     converter = apexpy.Apex(utils.datetime64_to_datetime(times[0]))
     sslat, sslon = convert.subsol_array(correct_times)
@@ -87,10 +87,10 @@ def test_get_tec_data():
 
 
 def test_get_arb_data():
-    start_date = np.datetime64("2012-06-10T10:10:10")
-    end_date = np.datetime64("2012-06-10T20:30:01")
+    start_date = np.datetime64("2015-10-10T10:10:10")
+    end_date = np.datetime64("2015-10-10T20:30:01")
     arb, times = io.get_arb_data(start_date, end_date)
-    correct_times = np.datetime64("2012-06-10T11:00:00") + np.arange(10) * np.timedelta64(1, 'h')
+    correct_times = np.datetime64("2015-10-10T11:00:00") + np.arange(10) * np.timedelta64(1, 'h')
     assert np.all(times.astype('datetime64[s]') == correct_times)
 
 

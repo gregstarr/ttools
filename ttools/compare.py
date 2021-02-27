@@ -11,6 +11,17 @@ from ttools import io, swarm, rbf_inversion, utils, plotting
 from ttools.config import mlat_grid, mlt_grid
 
 
+def get_trough_ratios(tec_troughs, swarm_troughs):
+    x1, y1 = utils.polar_to_cart(swarm_troughs['seg_e1_mlat'], swarm_troughs['seg_e1_mlt'])
+    x2, y2 = utils.polar_to_cart(swarm_troughs['seg_e2_mlat'], swarm_troughs['seg_e2_mlt'])
+    swarm_len_total = np.hypot(x2 - x1, y2 - y1)
+    mask = swarm_troughs['trough']
+    x1, y1 = utils.polar_to_cart(swarm_troughs['e1_mlat'][mask], swarm_troughs['seg_e1_mlt'][mask])
+    x2, y2 = utils.polar_to_cart(swarm_troughs['e2_mlat'][mask], swarm_troughs['e2_mlt'][mask])
+    swarm_len_trough = np.hypot(x2 - x1, y2 - y1)
+    return tec_troughs.sum(), tec_troughs.size, swarm_len_total, swarm_len_trough
+
+
 def compare(times, tec_troughs, swarm_troughs, ssmlon, mlat_grid=mlat_grid, mlt_grid=mlt_grid):
     # get segment MLT
     t1 = swarm_troughs['seg_e1_mlt'].values * np.pi / 12
@@ -23,6 +34,8 @@ def compare(times, tec_troughs, swarm_troughs, ssmlon, mlat_grid=mlat_grid, mlt_
     mlat_profs, trough_profs = utils.get_grid_slice_line(swarm_troughs['seg_e1_mlt'], swarm_troughs['seg_e1_mlat'],
                                                          swarm_troughs['seg_e2_mlt'], swarm_troughs['seg_e2_mlat'],
                                                          data_grids, mlt_grid, mlat_grid)
+    # get length / area sums
+    tec_area_total, tec_area_trough, swarm_len_total, swarm_len_trough = get_trough_ratios(tec_troughs, swarm_troughs)
     print("Comparing")
     results_list = []
     for t in range(swarm_troughs.shape[0]):
@@ -47,6 +60,10 @@ def compare(times, tec_troughs, swarm_troughs, ssmlon, mlat_grid=mlat_grid, mlt_
     results['swarm_ewall'] = swarm_troughs['e2_mlat'].where(down_mask, swarm_troughs['e1_mlat'])
     results['swarm_pwall'] = swarm_troughs['e1_mlat'].where(down_mask, swarm_troughs['e2_mlat'])
     results['mlon'] = (15 * seg_mlt - 180 + ssmlon[swarm_troughs['tec_ind']] + 360) % 360
+    results['tec_area_total'] = tec_area_total
+    results['tec_area_trough'] = tec_area_trough
+    results['swarm_len_total'] = swarm_len_total
+    results['swarm_len_trough'] = swarm_len_trough
     return results
 
 
@@ -85,7 +102,7 @@ def run_single_day(date, bg_est_shape=(3, 15, 15), model_weight_max=20, rbf_bw=1
                                                         data_grids, mlt_grid, mlat_grid)
         trimmed_tec, = utils.moving_func_trim(bg_est_shape[0], tec)
         for t in range(len(comparison_times)):
-            polar_fig, polar_ax = plt.subplots(1, 3, figsize=(20, 12), subplot_kw=dict(projection='polar'),
+            polar_fig, polar_ax = plt.subplots(1, 3, figsize=(18, 10), subplot_kw=dict(projection='polar'),
                                                tight_layout=True)
             line_fig, line_ax = plt.subplots(3, 2, figsize=(20, 12), tight_layout=True, sharex=True, sharey=True)
             swarm_troughs_t, swarm_segments_t, m_p, x_p = plotting.prepare_swarm_line_plot(t, swarm_segments,
@@ -136,10 +153,17 @@ def process_results(results, good_mlon_range=None, bad_mlon_range=None):
     ewall_diff_mean = diffs['ewall_diff'].mean()
     ewall_diff_std = diffs['ewall_diff'].std()
 
+    tec_area_total = results['tec_area_total'].sum()
+    tec_area_trough = results['tec_area_trough'].sum()
+    swarm_len_total = results['swarm_len_total'].sum()
+    swarm_len_trough = results['swarm_len_trough'].sum()
+
     statistics = {
         'tn': tn, 'fn': fn, 'fp': fp, 'tp': tp, 'acc': acc, 'tpr': tpr, 'tnr': tnr, 'fnr': fnr,
         'pwall_diff_mean': pwall_diff_mean, 'pwall_diff_std': pwall_diff_std, 'ewall_diff_mean': ewall_diff_mean,
-        'ewall_diff_std': ewall_diff_std
+        'ewall_diff_std': ewall_diff_std, 'tec_area_total': tec_area_total, 'tec_area_trough': tec_area_trough,
+        'swarm_len_total': swarm_len_total, 'swarm_len_trough': swarm_len_trough,
+        'tec_area_ratio': tec_area_trough / tec_area_total, 'swarm_len_ratio': swarm_len_trough / swarm_len_total
     }
 
     if good_mlon_range is not None or bad_mlon_range is not None:

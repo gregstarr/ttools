@@ -9,20 +9,20 @@ if __name__ == "__main__":
     from ttools import compare
 
     params = {
-        'bg_est_shape': (3, 21, 21),
-        'model_weight_max': 5,
-        'rbf_bw': 1,
+        'bg_est_shape': (1, 15, 15),
+        'model_weight_max': 4,
+        'rbf_bw': 2,
         'tv_hw': 2,
-        'tv_vw': .5,
-        'l2_weight': .13,
-        'tv_weight': .1,
-        'perimeter_th': 20,
-        'area_th': 40,
-        'artifact_key': '9',
+        'tv_vw': 1,
+        'l2_weight': .3,
+        'tv_weight': .05,
+        'perimeter_th': 70,
+        'area_th': 25,
+        'artifact_key': '3',
         'auroral_boundary': True,
-        'prior_order': 1,
+        'prior_order': 2,
         'prior': 'empirical_model',
-        'prior_arb_offset': -1
+        # 'prior_arb_offset': -1
     }
     t0 = time.time()
     results = compare.run_n_random_days(100, **params, make_plots=True, plot_dir="E:\\temp_plots")

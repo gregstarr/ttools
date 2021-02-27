@@ -1,6 +1,6 @@
 import numpy as np
 
-from ttools import rbf_inversion, config
+from ttools import rbf_inversion, config, io
 
 
 def test_preprocess_interval():
@@ -72,7 +72,8 @@ def test_postprocess():
 
 
 def test_get_optimization_args():
-    """var, basis, x, tv, l2, times, shp"""
+    """Verify that get_optimization_args properly handles various outputs
+    """
     T = 3
     D = 10
     x = np.random.randn(T, D, D)
@@ -81,7 +82,8 @@ def test_get_optimization_args():
     mlt_vals = np.arange(D)
     mlat_grid = np.arange(D)[:, None] * np.ones((1, D))
     arb = np.ones((T, D)) * 7.5
-    args = rbf_inversion.get_optimization_args(x, times, mlt_vals, mlat_grid, 10, .5, .5, .5, .5, .5, 1, 'empirical_model', arb, 0)
+    args = rbf_inversion.get_optimization_args(x, times, mlt_vals, mlat_grid, 10, .5, .5, .5, .5, .5, 1,
+                                               'empirical_model', arb, 0)
     var, basis, x_out, tv, l2, t, shp = args[0]
     assert len(args) == T
     assert basis.shape == (D ** 2 - 4, D ** 2)
@@ -91,9 +93,11 @@ def test_get_optimization_args():
     assert l2.min() == .5
     assert l2.max() == 5
     assert shp == (D, D)
-    args2 = rbf_inversion.get_optimization_args(x, times, mlt_vals, mlat_grid, 10, .5, .5, .5, .5, .5, 2, 'empirical_model', arb, 0)
+    args2 = rbf_inversion.get_optimization_args(x, times, mlt_vals, mlat_grid, 10, .5, .5, .5, .5, .5, 2,
+                                                'empirical_model', arb, 0)
     assert np.mean(args2[0][4] != l2) > .75
-    args3 = rbf_inversion.get_optimization_args(x, times, mlt_vals, mlat_grid, 10, .5, .5, .5, .5, .5, 1, 'auroral_boundary', arb, 0)
+    args3 = rbf_inversion.get_optimization_args(x, times, mlt_vals, mlat_grid, 10, .5, .5, .5, .5, .5, 1,
+                                                'auroral_boundary', arb, 0)
     l = abs(mlat_grid - arb[0]).ravel()
     l -= l.min()
     l = (10 - 1) * l / l.max() + 1
@@ -102,9 +106,39 @@ def test_get_optimization_args():
 
 
 def test_artifacts():
-    """Can I verify that the interpolation is happening properly?"""
+    """This verifies that inputting a 0-360 mlon and 30-60 mlat grid gives you back the artifact grid
+    """
     mlt_grid = np.arange(-12, 12, 24/360)[None, :] * np.ones((60, 1))
     mlat_grid = np.arange(30, 90)[:, None] * np.ones((1, 360))
-    corr = rbf_inversion.get_artifacts(np.ones(10) * 180, '9', mlt_grid=mlt_grid, mlat_grid=mlat_grid)
+    corr = rbf_inversion.get_artifacts(np.ones(1) * 180, '9', mlt_grid=mlt_grid, mlat_grid=mlat_grid)[0]
     artifacts = np.load(config.artifact_file)
-    assert np.allclose(np.roll(artifacts['9'], 180, axis=1), corr[0])
+    assert np.allclose(np.roll(artifacts['9'], 180, axis=1), corr)
+
+    corr = rbf_inversion.get_artifacts(np.ones(1) * 179, '7')[0]
+    assert np.allclose(np.roll(artifacts['7'], 180, axis=1)[:, ::2], corr)
+
+
+def test_get_tec_troughs():
+    """Verify that get_tec_troughs can detect an actual trough, verify that high troughs are rejected using auroral
+    boundary data
+    """
+    T = 12
+    one_h = np.timedelta64(1, 'h')
+    start_time = np.datetime64("2015-10-07T06:00:00")
+    end_time = start_time + np.timedelta64(T, 'h')
+    comparison_times = np.arange(start_time, end_time, one_h)
+    bg_est_shape = (3, 19, 19)
+    tec_start = comparison_times[0] - np.floor(bg_est_shape[0] / 2) * one_h
+    tec_end = comparison_times[-1] + (np.floor(bg_est_shape[0] / 2) + 1) * one_h
+
+    tec, times, ssmlon, n = io.get_tec_data(tec_start, tec_end)
+    arb, _ = io.get_arb_data(start_time, end_time)
+    trough, x = rbf_inversion.get_tec_troughs(tec, times, bg_est_shape, model_weight_max=5, l2_weight=.1, tv_weight=.05,
+                                              tv_hw=2, prior_order=1)
+    assert trough.shape == x.shape == (T, 60, 180)
+    assert trough[1, 20:30, 60:120].mean() > .5
+    assert trough[1][45:].sum() > 100
+    trough, x = rbf_inversion.get_tec_troughs(tec, times, bg_est_shape, model_weight_max=5, l2_weight=.1, tv_weight=.05,
+                                              tv_hw=2, prior_order=1, arb=arb)
+    assert trough[1, 20:30, 60:120].mean() > .5
+    assert trough[1][45:].sum() == 0

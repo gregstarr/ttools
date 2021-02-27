@@ -26,7 +26,7 @@ install:
   - python -m pip install --upgrade pip
   - pip install coveralls gdown
   - cd test
-  - gdown https://drive.google.com/uc?id=1AWlGvS2zVIhs1EGS9p8xcHtC13ks6Gen
+  - gdown https://drive.google.com/uc?id=1aK-Vwa-w1xUXcqLyXG7Bvi51qdE0gyP5
   - unzip ttools_data
   - cd ..
   

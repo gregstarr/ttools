@@ -186,6 +186,7 @@ def find_troughs_in_segment(mlat, smooth_dne, threshold=-.2, width_min=1, width_
     # find zero crossings
     zerox, = np.nonzero(np.diff(smooth_dne_i >= 0))
     zerox += 1
+    zerox = np.concatenate(([0], zerox, [smooth_dne_i.shape[0] - 1]))
     # check each interval
     if mlat[0] > mlat[-1]:
         iterator = range(zerox.shape[0] - 2, -1, -1)
@@ -215,11 +216,13 @@ def unpack_trough(mlat, mlt, smooth_dne, trough):
 
 
 def get_segments_data(tec_times):
-    """
+    """This function collects and organizes SWARM data into "orbital segments" from 45 - 75 mlat. There are two
+    orbital segments per orbit of the satellite: 'up' and 'down', where the mlat is increasing and decreasing with
+    time respectively. Finally there are three satellites and so for each tec time, there are six swarm segments.
 
     Parameters
     ----------
-    tec_times
+    tec_times: numpy.ndarray[datetime64]
 
     Returns
     -------
@@ -227,8 +230,14 @@ def get_segments_data(tec_times):
         {
             sat: [
                 dict{
-                    times, mlat, mlt, dne, smooth_dne, direction, tec_time
-                }
+                    'up': [
+                        dict{times, mlat, mlt, dne, smooth_dne, direction, tec_time_1},
+                        ...,
+                        dict{times, mlat, mlt, dne, smooth_dne, direction, tec_time_N},
+                    ],
+                    'down': [...]
+                },
+                ...
             ]
         }
     """

@@ -70,9 +70,9 @@ def calculate_bins(mlat, mlt, tec, times, ssmlon, bins):
     return times[0], final_tec, ssmlon[0], final_tec_n, final_tec_s
 
 
-def process_month(start_date, end_date, mlat_grid, mlon_grid, converter, bins, map_period=np.timedelta64(1, 'h'),
-                  madrigal_dir=None):
-    """Processes one month's worth of madrigal data. Opens madrigal h5 files, converts input mlon grid to MLT by
+def process_file(start_date, end_date, mlat_grid, mlon_grid, converter, bins, map_period=np.timedelta64(1, 'h'),
+                 madrigal_dir=None):
+    """Processes madrigal data into a single file. Opens madrigal h5 files, converts input mlon grid to MLT by
     computing subsolar points at each time step, sets up and runs TEC binning, unpacks and returns results.
 
     Parameters
@@ -120,51 +120,73 @@ def get_mag_grid(ref_lat, ref_lon, converter):
     return mlat, mlon
 
 
-def process_year(start_date, end_date, ref_lat, ref_lon, bins, output_dir=None):
-    """Processes monthly madrigal data and writes to files.
+def _output_file_name(date):
+    ymd = utils.decompose_datetime64(date)
+    return "{year:04d}_{month:02d}_tec.h5".format(year=ymd[0, 0], month=ymd[0, 1])
+
+
+def process_multiple_files(start_date, end_date, bins, dt=np.timedelta64(1, 'M'), map_period=np.timedelta64(1, 'h'),
+                           ref_lat=None, ref_lon=None, output_dir=None, file_name_pattern=_output_file_name):
+    """Processes an interval of madrigal data and writes to files.
 
     Parameters
     ----------
-    start_date, end_date: np.datetime64
-    ref_lat: numpy.ndarray[float]
-        latitude values of madrigal lat-lon grid
-    ref_lon: numpy.ndarray[float]
-        longitude values of madrigal lat-lon grid
+    start_date, end_date: numpy.datetime64
     bins: list[numpy.ndarray[float] (X + 1, ), numpy.ndarray[float] (Y + 1, )]
+    dt, map_period: numpy.timedelta64
+    ref_lat, ref_lon: numpy.ndarray[float]
+        latitude / longitude values of madrigal lat-lon grid
+    output_dir: str
+        directory to write files to
+    file_name_pattern: callable
     """
+    if ref_lat is None:
+        ref_lat = config.madrigal_lat
+    if ref_lon is None:
+        ref_lon = config.madrigal_lon
     if output_dir is None:
         output_dir = config.tec_dir
     apex_date = utils.datetime64_to_datetime(start_date)
     converter = apexpy.Apex(date=apex_date)
     mlat, mlon = get_mag_grid(ref_lat, ref_lon, converter)
-    months = np.arange(start_date, end_date, np.timedelta64(1, 'M'))
+    months = np.arange(start_date, end_date, dt)
     for month in months:
-        times, tec, ssmlon, n, std = process_month(month, month + 1, mlat, mlon, converter, bins)
+        times, tec, ssmlon, n, std = process_file(month, min(end_date, month + dt), mlat, mlon, converter, bins,
+                                                  map_period)
         if np.isfinite(tec).any():
-            ymd = utils.decompose_datetime64(month)
-            fn = os.path.join(output_dir, "{year:04d}_{month:02d}_tec.h5".format(year=ymd[0, 0], month=ymd[0, 1]))
+            fn = os.path.join(output_dir, file_name_pattern(month))
             io.write_h5(fn, times=times.astype('datetime64[s]').astype(int), tec=tec, n=n, std=std, ssmlon=ssmlon)
         else:
             print(f"No data for month: {month}, not writing file")
 
 
-def process_dataset(start_year, end_year, mlat_bins, mlt_bins):
-    """'main' function for creating tec dataset. Brief setup, then calls `process_year` on each year as specified by
-    inputs. Writes grid file.
+def process_dataset(start_year, end_year, mlat_bins, mlt_bins, apex_dt=np.timedelta64(1, 'Y'),
+                    file_dt=np.timedelta64(1, 'M'), map_period=np.timedelta64(1, 'h'), output_dir=None,
+                    file_name_pattern=_output_file_name):
+    """'main' function for creating tec dataset. Brief setup, then calls `process_multiple_files` on each year as
+    specified by inputs. Writes grid file.
 
     Parameters
     ----------
-    start_year, end_year: np.datetime64
-    mlat_bins, mlt_bins: np.ndarrat[float]
+    start_year, end_year: numpy.datetime64
+    mlat_bins, mlt_bins: numpy.ndarray[float]
+    apex_dt, file_dt, map_period: numpy.timedelta
+        interval to update apex date, interval to write to each file, interval to include in each map
+    output_dir: str
+    file_name_pattern: callable
+        function accepts a numpy.datetime and returns an h5 file name
     """
+    if output_dir is None:
+        output_dir = config.tec_dir
     mlat_vals = (mlat_bins[:-1] + mlat_bins[1:]) / 2
     mlt_vals = (mlt_bins[:-1] + mlt_bins[1:]) / 2
     bins = [mlat_bins, mlt_bins]
-    years = np.arange(start_year, end_year, np.timedelta64(1, 'Y'))
+    years = np.arange(start_year, end_year, apex_dt)
     t0 = time.time()
     for year in years:
-        process_year(year, year + 1, config.madrigal_lat, config.madrigal_lon, bins)
+        process_multiple_files(year, min(end_year, year + apex_dt), bins, dt=file_dt, map_period=map_period,
+                               output_dir=output_dir, file_name_pattern=file_name_pattern)
     tf = time.time()
     print((tf - t0) / 60)
     # make grid file
-    io.write_h5(config.grid_file, mlt=mlt_vals, mlat=mlat_vals)
+    io.write_h5(os.path.join(output_dir, "grid.h5"), mlt=mlt_vals, mlat=mlat_vals)

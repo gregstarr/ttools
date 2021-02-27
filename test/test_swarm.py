@@ -80,8 +80,8 @@ def test_get_enter_exit():
 
 
 def test_get_enter_exit_data():
-    start_date = np.datetime64("2019-12-26T00:00:00")
-    end_date = np.datetime64("2019-12-27T00:00:00.000")
+    start_date = np.datetime64("2015-10-07T00:00:00")
+    end_date = np.datetime64("2015-10-08T00:00:00.000")
     data, times = io.get_swarm_data(start_date, end_date, 'C')
     mlat = data['apex_lat']
     fin_ind = np.argwhere(np.isfinite(mlat))[:, 0]
@@ -95,8 +95,8 @@ def test_get_enter_exit_data():
 
 
 def test_get_closest_segment():
-    start_date = np.datetime64("2019-12-26T06:00:00")
-    end_date = np.datetime64("2019-12-26T12:00:00.000")
+    start_date = np.datetime64("2015-10-07T06:00:00")
+    end_date = np.datetime64("2015-10-07T12:00:00.000")
     data, times = io.get_swarm_data(start_date, end_date, 'C')
     fin_mask = np.isfinite(data['apex_lat'])
     tec_times = start_date + np.arange(6) * np.timedelta64(1, 'h')
@@ -188,8 +188,8 @@ def test_find_troughs_in_segment_missing_3():
 
 
 def test_find_troughs_in_segment_data():
-    start_date = np.datetime64("2019-12-26T06:00:00")
-    end_date = np.datetime64("2019-12-26T12:00:00.000")
+    start_date = np.datetime64("2015-10-07T06:00:00")
+    end_date = np.datetime64("2015-10-07T12:00:00.000")
     data, times = io.get_swarm_data(start_date, end_date, 'C')
     times, logne, background, mlat, mlt = swarm.process_swarm_data_interval(data, times)
     dne = logne - background
@@ -220,3 +220,38 @@ def test_find_troughs_in_segment_data():
         front_trough = swarm.find_troughs_in_segment(mlat[fin_mask][front], smooth_dne[fin_mask][front], threshold)
         back_trough = swarm.find_troughs_in_segment(mlat[fin_mask][back], smooth_dne[fin_mask][back], threshold)
         assert front_trough and back_trough
+
+
+def test_get_segments_data():
+    T = 12
+    one_h = np.timedelta64(1, 'h')
+    start_time = np.datetime64("2015-10-07T06:00:00")
+    end_time = start_time + np.timedelta64(T, 'h')
+    tec_times = np.arange(start_time, end_time, one_h)
+    segments = swarm.get_segments_data(tec_times)
+    for sat, sat_segments in segments.items():
+        for direction, dir_segments in sat_segments.items():
+            for seg in dir_segments:
+                assert np.all(abs(seg['times'] - seg['tec_time']).astype('timedelta64[s]').astype(float) < 60 * 60)
+                if direction == 'up':
+                    assert np.all(np.diff(seg['mlat']) > 0)
+                elif direction == 'down':
+                    assert np.all(np.diff(seg['mlat']) < 0)
+                else:
+                    assert False
+
+
+def test_get_swarm_troughs():
+    T = 12
+    one_h = np.timedelta64(1, 'h')
+    start_time = np.datetime64("2015-10-07T06:00:00")
+    end_time = start_time + np.timedelta64(T, 'h')
+    tec_times = np.arange(start_time, end_time, one_h)
+    segments = swarm.get_segments_data(tec_times)
+    troughs = swarm.get_swarm_troughs(segments)
+    for _, t in troughs.iterrows():
+        sat = t['sat']
+        direction = 'up' if abs(t['seg_e1_mlat'] - 45) < 2 else 'down'
+        i = t['tec_ind']
+        print(_, np.any(segments[sat][direction][i]['smooth_dne'] < -.2), t['trough'])
+        assert np.any(segments[sat][direction][i]['smooth_dne'] < -.2) == t['trough']

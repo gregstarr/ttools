@@ -198,3 +198,9 @@ def get_grid_slice_line(x1, y1, x2, y2, data_grids, x_grid, y_grid, **profile_li
                 dprof = profile_line(dgrid.astype(float), src, dst, **kwargs)
             results[i].append(dprof)
     return results
+
+
+def polar_to_cart(lat, lon, period=24):
+    r = 90 - lat
+    t = lon * 2 * np.pi / period
+    return r * np.cos(t), r * np.sin(t)
