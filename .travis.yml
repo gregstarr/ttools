@@ -10,6 +10,7 @@ addons:
     update: true
     packages:
     - gfortran
+    - unzip
 
 install:
   - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
@@ -24,10 +25,10 @@ install:
   - export PYTHONPATH=/home/travis/build/gregstarr/ttools
   - python -m pip install --upgrade pip
   - pip install coveralls gdown
-  - mkdir -p test/test_tec_data
-  - cd test/test_tec_data
-  - gdown https://drive.google.com/uc?id=1tE6kLCmLMFulxhVu95gK8VVZNh0n-3hx
-  - cd ../..
+  - cd test
+  - gdown https://drive.google.com/uc?id=1DHOYbXpeRVnMUH1_ddJmcwPe_v1ON6HW
+  - unzip ttools_data.zip
+  - cd ..
   
 script:
   - coverage run --source=ttools -m pytest -v test/

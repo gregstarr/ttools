@@ -131,4 +131,6 @@ dmypy.json
 # pycharm
 .idea
 
-test/test_tec_data
+# Test data
+test/ttools_data
+*.zip
