@@ -27,7 +27,7 @@ install:
   - pip install coveralls gdown
   - cd test
   - gdown https://drive.google.com/uc?id=1DHOYbXpeRVnMUH1_ddJmcwPe_v1ON6HW
-  - unzip ttools_data.zip
+  - unzip ttools_data
   - cd ..
   
 script:
