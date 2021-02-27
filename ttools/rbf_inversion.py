@@ -134,9 +134,12 @@ def get_tv_matrix(im_shape, hw=1, vw=1):
     return csr_matrix(hw * (right + left) + vw * (up + down))
 
 
-def get_optimization_args(x, times, mlt_vals=config.mlt_vals, mlat_grid=config.mlat_grid, model_weight_max=25,
-                          rbf_bw=1, tv_hw=2, tv_vw=1, l2_weight=.1, tv_weight=.06, prior_order=1,
-                          prior='empirical_model', arb=None, arb_offset=-1):
+def get_optimization_args(x, times, mlt_vals=None, mlat_grid=None, model_weight_max=25, rbf_bw=1, tv_hw=2, tv_vw=1,
+                          l2_weight=.1, tv_weight=.06, prior_order=1, prior='empirical_model', arb=None, arb_offset=-1):
+    if mlt_vals is None:
+        mlt_vals = config.mlt_vals
+    if mlat_grid is None:
+        mlat_grid = config.mlat_grid
     all_args = []
     # get rbf basis matrix
     basis = get_rbf_matrix(x.shape[1:], rbf_bw)
@@ -198,7 +201,9 @@ def run_multiple(args, parallel=True):
     return np.stack(results, axis=0)
 
 
-def get_artifacts(mlt_grid, ssmlon, artifact_key, fn="E:\\tec_data\\tec_artifact.npz"):
+def get_artifacts(mlt_grid, ssmlon, artifact_key, fn=None):
+    if fn is None:
+        fn = config.artifact_file
     artifacts = np.load(fn)
     mlon = convert.mlt_to_mlon_sub(mlt_grid[None, :, :], ssmlon[:, None, None]) * np.pi / 180
     comlat = (90 - config.mlat_grid) * np.pi / 180

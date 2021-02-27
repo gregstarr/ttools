@@ -47,7 +47,7 @@ def _model_subroutine_lat(mlt, glon, kp):
     return 65.5 - 2.4 * kp + phi_t + phi_lon * np.exp(-.3 * kp)
 
 
-def _get_weighted_kp(ut, fn=config.kp_file, tau=.6, T=10):
+def _get_weighted_kp(ut, fn=None, tau=.6, T=10):
     """Get a weighed sum of kp values over time. See paper for details.
 
     Parameters
@@ -65,6 +65,8 @@ def _get_weighted_kp(ut, fn=config.kp_file, tau=.6, T=10):
     -------
     weighted kp: float
     """
+    if fn is None:
+        fn = config.kp_file
     df = io.get_gm_index_kyoto(fn)
     ap = df['ap'].values
     times = np.array(df['ap'].index.values.astype(float) / 1e9, dtype=int)

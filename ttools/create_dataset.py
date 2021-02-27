@@ -3,6 +3,7 @@ import apexpy
 from scipy.stats import binned_statistic_2d
 import time
 from multiprocessing import Pool
+import os
 
 from ttools import io, config, convert, utils
 
@@ -139,7 +140,7 @@ def process_year(start_date, end_date, ref_lat, ref_lon, bins):
         times, tec, ssmlon, n, std = process_month(month, month + 1, mlat, mlon, converter, bins)
         if np.isfinite(tec).any():
             ymd = utils.decompose_datetime64(month)
-            fn = config.tec_file_pattern.format(year=ymd[0, 0], month=ymd[0, 1])
+            fn = os.path.join(dir, "{year:04d}_{month:02d}_tec.h5".format(year=ymd[0, 0], month=ymd[0, 1]))
             io.write_h5(fn, times=times.astype('datetime64[s]').astype(int), tec=tec, n=n, std=std, ssmlon=ssmlon)
         else:
             print(f"No data for month: {month}, not writing file")

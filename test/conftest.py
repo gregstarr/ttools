@@ -1,27 +1,16 @@
 import pytest
 import os
 
+from ttools import config
 
-@pytest.fixture()
+
+@pytest.fixture(autouse=True, scope='session')
 def test_data_dir():
-    yield os.path.join(os.path.dirname(__file__), 'ttools_data')
+    path = os.path.join(os.path.dirname(__file__), 'ttools_data')
+    config.update(path)
+    yield path
 
 
 @pytest.fixture
 def madrigal_data_dir(test_data_dir):
-    yield os.path.join(test_data_dir, 'madrigal')
-
-
-@pytest.fixture
-def tec_data_dir(test_data_dir):
-    yield os.path.join(test_data_dir, 'tec_data')
-
-
-@pytest.fixture
-def swarm_data_dir(test_data_dir):
-    yield os.path.join(test_data_dir, 'swarm')
-
-
-@pytest.fixture
-def swarm_data_dir(test_data_dir):
-    yield os.path.join(test_data_dir, 'swarm')
+    yield os.path.join(test_data_dir, 'tec_data', 'download')

@@ -79,10 +79,10 @@ def test_get_enter_exit():
     assert ends.size == 0
 
 
-def test_get_enter_exit_data(swarm_data_dir):
+def test_get_enter_exit_data():
     start_date = np.datetime64("2019-12-26T00:00:00")
     end_date = np.datetime64("2019-12-27T00:00:00.000")
-    data, times = io.get_swarm_data(start_date, end_date, 'C', data_dir=swarm_data_dir, coords_dir=swarm_data_dir)
+    data, times = io.get_swarm_data(start_date, end_date, 'C')
     mlat = data['apex_lat']
     fin_ind = np.argwhere(np.isfinite(mlat))[:, 0]
     enter_mask = mlat[fin_ind] >= 45
@@ -94,10 +94,10 @@ def test_get_enter_exit_data(swarm_data_dir):
     assert np.all(mlat[fin_ind[ends - 1]] <= 75)
 
 
-def test_get_closest_segment(swarm_data_dir):
+def test_get_closest_segment():
     start_date = np.datetime64("2019-12-26T06:00:00")
     end_date = np.datetime64("2019-12-26T12:00:00.000")
-    data, times = io.get_swarm_data(start_date, end_date, 'C', data_dir=swarm_data_dir, coords_dir=swarm_data_dir)
+    data, times = io.get_swarm_data(start_date, end_date, 'C')
     fin_mask = np.isfinite(data['apex_lat'])
     tec_times = start_date + np.arange(6) * np.timedelta64(1, 'h')
     starts, stops = swarm.get_closest_segment(times[fin_mask], data['apex_lat'][fin_mask], tec_times, 45, 75)
@@ -187,10 +187,10 @@ def test_find_troughs_in_segment_missing_3():
     assert tmin == 50
 
 
-def test_find_troughs_in_segment_data(swarm_data_dir):
+def test_find_troughs_in_segment_data():
     start_date = np.datetime64("2019-12-26T06:00:00")
     end_date = np.datetime64("2019-12-26T12:00:00.000")
-    data, times = io.get_swarm_data(start_date, end_date, 'C', data_dir=swarm_data_dir, coords_dir=swarm_data_dir)
+    data, times = io.get_swarm_data(start_date, end_date, 'C')
     times, logne, background, mlat, mlt = swarm.process_swarm_data_interval(data, times)
     dne = logne - background
     smooth_dne = utils.centered_bn_func(bn.move_mean, dne, 11, pad=True, min_count=1)
