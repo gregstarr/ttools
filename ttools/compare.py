@@ -234,7 +234,8 @@ def run_n_random_days(n, start_date=np.datetime64("2014-01-01"), end_date=np.dat
     return results
 
 
-def random_parameter_search(n_experiments, n_trials, base_dir="E:\\trough_comparison"):
+def random_parameter_search(n_experiments, n_trials, base_dir="E:\\trough_comparison",
+                            start_date=np.datetime64("2014-01-01"), end_date=np.datetime64("2020-01-01")):
     processed_results = []
     for i in range(n_experiments):
         # setup directory
@@ -247,7 +248,7 @@ def random_parameter_search(n_experiments, n_trials, base_dir="E:\\trough_compar
         io.write_yaml(os.path.join(experiment_dir, 'params.yaml'), **params)
 
         t0 = time.time()
-        results = run_n_random_days(n_trials, **params)
+        results = run_n_random_days(n_trials, **params, start_date=start_date, end_date=end_date)
         statistics = process_results(results, bad_mlon_range=[130, 260])
         for k, v in statistics.items():
             print(k, v)

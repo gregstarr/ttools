@@ -176,3 +176,19 @@ def test_run_single_day():
     assert low_reg_stats['fpr'] >= high_reg_stats['fpr']
     assert low_reg_stats['fnr'] <= high_reg_stats['fnr']
     assert low_reg_stats['tnr'] <= high_reg_stats['tnr']
+
+
+def test_random_parameter_search():
+    start_date = np.datetime64("2015-10-07")
+    end_date = np.datetime64("2015-10-08")
+    with tempfile.TemporaryDirectory() as tempdir:
+        compare.random_parameter_search(1, 1, tempdir, start_date, end_date)
+        overall_stats_fn = os.path.join(tempdir, 'results.csv')
+        exp_0_results_fn = os.path.join(tempdir, 'experiment_0', 'results.csv')
+        exp_0_params_fn = os.path.join(tempdir, 'experiment_0', 'params.yaml')
+        for f in [overall_stats_fn, exp_0_params_fn, exp_0_results_fn]:
+            assert os.path.exists(f)
+        overall_stats = pandas.read_csv(overall_stats_fn)
+        assert overall_stats.shape == (1, 39)
+        exp_0_results = pandas.read_csv(exp_0_results_fn)
+        assert exp_0_results.shape == (24 * 6, 13)
