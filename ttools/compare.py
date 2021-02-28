@@ -4,10 +4,9 @@ import traceback
 from sklearn.metrics import confusion_matrix
 import os
 from scipy import stats
-import matplotlib.pyplot as plt
 import time
 
-from ttools import io, swarm, rbf_inversion, utils, plotting
+from ttools import io, swarm, rbf_inversion, utils
 from ttools.config import mlat_grid, mlt_grid
 
 
@@ -67,6 +66,96 @@ def compare(times, tec_troughs, swarm_troughs, ssmlon, mlat_grid=mlat_grid, mlt_
     return results
 
 
+def get_comparison_stats(results):
+    tn, fn, fp, tp = confusion_matrix(results['tec_trough'], results['swarm_trough']).ravel()
+    acc = (tn + tp) / (tn + fn + fp + tp)
+    tpr = tp / (tp + fn)
+    tnr = tn / (tn + fp)
+    fnr = fn / (fn + tp)
+    fpr = fp / (fp + tn)
+
+    diffs = get_diffs(results)
+    pwall_diff_mean = diffs['pwall_diff'].mean()
+    pwall_diff_std = diffs['pwall_diff'].std()
+    ewall_diff_mean = diffs['ewall_diff'].mean()
+    ewall_diff_std = diffs['ewall_diff'].std()
+
+    tec_area_total = results['tec_area_total'].sum()
+    tec_area_trough = results['tec_area_trough'].sum()
+    swarm_len_total = results['swarm_len_total'].sum()
+    swarm_len_trough = results['swarm_len_trough'].sum()
+
+    statistics = {
+        'tn': tn, 'fn': fn, 'fp': fp, 'tp': tp, 'acc': acc, 'tpr': tpr, 'tnr': tnr, 'fnr': fnr, 'fpr': fpr,
+        'pwall_diff_mean': pwall_diff_mean, 'pwall_diff_std': pwall_diff_std, 'ewall_diff_mean': ewall_diff_mean,
+        'ewall_diff_std': ewall_diff_std, 'tec_area_total': tec_area_total, 'tec_area_trough': tec_area_trough,
+        'swarm_len_total': swarm_len_total, 'swarm_len_trough': swarm_len_trough,
+        'tec_area_ratio': tec_area_trough / tec_area_total, 'swarm_len_ratio': swarm_len_trough / swarm_len_total
+    }
+    return statistics
+
+
+def process_results(results, good_mlon_range=None, bad_mlon_range=None):
+    statistics = get_comparison_stats(results)
+
+    if good_mlon_range is not None or bad_mlon_range is not None:
+        if good_mlon_range is not None:
+            mlon_mask = (results['mlon'] >= good_mlon_range[0]) & (results['mlon'] <= good_mlon_range[1])
+        else:
+            mlon_mask = ~((results['mlon'] >= bad_mlon_range[0]) & (results['mlon'] <= bad_mlon_range[1]))
+        mlon_restricted_stats = {f'mlon_{k}': v for k, v in get_comparison_stats(results[mlon_mask]).items()}
+        statistics.update(mlon_restricted_stats)
+    return statistics
+
+
+def get_diffs(results):
+    compare_mask = results['tec_trough'] & results['swarm_trough']
+    pwall_diff = results['swarm_pwall'][compare_mask] - results['tec_pwall'][compare_mask]
+    ewall_diff = results['swarm_ewall'][compare_mask] - results['tec_ewall'][compare_mask]
+    statistics = {'pwall_diff': pwall_diff, 'ewall_diff': ewall_diff}
+    return pandas.DataFrame(statistics)
+
+
+PARAM_SAMPLING = {
+    'tv_weight': stats.loguniform(.001, 1),
+    'l2_weight': stats.loguniform(.001, 1),
+    'bge_spatial_size': stats.randint(4, 12),
+    'bge_temporal_rad': stats.randint(0, 3),
+    'rbf_bw': stats.randint(1, 4),
+    'tv_hw': stats.randint(1, 4),
+    'tv_vw': stats.randint(1, 4),
+    'model_weight_max': stats.randint(1, 20),
+    'perimeter_th': stats.randint(10, 100),
+    'area_th': stats.randint(10, 100),
+    'artifact_key': [None, '3', '5', '7', '9'],
+    'prior_order': [1, 2],
+    'prior': ['empirical_model', 'auroral_boundary'],
+    'prior_arb_offset': stats.randint(-5, 0),
+}
+
+
+def get_random_hyperparams():
+    params = {}
+    bge_temporal_size = 0
+    bge_spatial_size = 0
+    for p in PARAM_SAMPLING:
+        if isinstance(PARAM_SAMPLING[p], list):
+            val = PARAM_SAMPLING[p][np.random.randint(len(PARAM_SAMPLING[p]))]
+        else:
+            try:
+                val = PARAM_SAMPLING[p].rvs().item()
+            except:
+                val = PARAM_SAMPLING[p].rvs()
+        if p == 'bge_temporal_rad':
+            bge_temporal_size = val * 2 + 1
+        elif p == 'bge_spatial_size':
+            bge_spatial_size = val * 2 + 1
+        else:
+            params[p] = val
+    params['bg_est_shape'] = (bge_temporal_size, bge_spatial_size, bge_spatial_size)
+    return params
+
+
 def run_single_day(date, bg_est_shape=(3, 15, 15), model_weight_max=20, rbf_bw=1, tv_hw=1, tv_vw=1, l2_weight=.1,
                    tv_weight=.05, perimeter_th=50, area_th=20, make_plots=False, plot_dir=None, artifact_key=None,
                    auroral_boundary=True, prior_order=1, prior='empirical_model', prior_arb_offset=-1):
@@ -96,6 +185,8 @@ def run_single_day(date, bg_est_shape=(3, 15, 15), model_weight_max=20, rbf_bw=1
     swarm_troughs = swarm.get_swarm_troughs(swarm_segments)
 
     if make_plots:
+        import matplotlib.pyplot as plt
+        from ttools import plotting
         data_grids = [mlat_grid, x[swarm_troughs['tec_ind']]]
         mlat_profs, x_profs = utils.get_grid_slice_line(swarm_troughs['seg_e1_mlt'], swarm_troughs['seg_e1_mlat'],
                                                         swarm_troughs['seg_e2_mlt'], swarm_troughs['seg_e2_mlat'],
@@ -138,110 +229,6 @@ def run_n_random_days(n, start_date=np.datetime64("2014-01-01"), end_date=np.dat
             traceback.print_exc()
     results = pandas.concat(results, ignore_index=True)
     return results
-
-
-def process_results(results, good_mlon_range=None, bad_mlon_range=None):
-    tn, fn, fp, tp = confusion_matrix(results['tec_trough'], results['swarm_trough']).ravel()
-    acc = (tn + tp) / (tn + fn + fp + tp)
-    tpr = tp / (tp + fn)
-    tnr = tn / (tn + fp)
-    fnr = 1 - tnr
-
-    diffs, mlon_mask = get_diffs(results, good_mlon_range, bad_mlon_range)
-    pwall_diff_mean = diffs['pwall_diff'].mean()
-    pwall_diff_std = diffs['pwall_diff'].std()
-    ewall_diff_mean = diffs['ewall_diff'].mean()
-    ewall_diff_std = diffs['ewall_diff'].std()
-
-    tec_area_total = results['tec_area_total'].sum()
-    tec_area_trough = results['tec_area_trough'].sum()
-    swarm_len_total = results['swarm_len_total'].sum()
-    swarm_len_trough = results['swarm_len_trough'].sum()
-
-    statistics = {
-        'tn': tn, 'fn': fn, 'fp': fp, 'tp': tp, 'acc': acc, 'tpr': tpr, 'tnr': tnr, 'fnr': fnr,
-        'pwall_diff_mean': pwall_diff_mean, 'pwall_diff_std': pwall_diff_std, 'ewall_diff_mean': ewall_diff_mean,
-        'ewall_diff_std': ewall_diff_std, 'tec_area_total': tec_area_total, 'tec_area_trough': tec_area_trough,
-        'swarm_len_total': swarm_len_total, 'swarm_len_trough': swarm_len_trough,
-        'tec_area_ratio': tec_area_trough / tec_area_total, 'swarm_len_ratio': swarm_len_trough / swarm_len_total
-    }
-
-    if good_mlon_range is not None or bad_mlon_range is not None:
-        tn, fn, fp, tp = confusion_matrix(results['tec_trough'][mlon_mask], results['swarm_trough'][mlon_mask]).ravel()
-        acc = (tn + tp) / (tn + fn + fp + tp)
-        tpr = tp / (tp + fn)
-        tnr = tn / (tn + fp)
-        fnr = 1 - tnr
-
-        pwall_diff_mean = diffs['pwall_diff'][diffs['mlon_mask']].mean()
-        pwall_diff_std = diffs['pwall_diff'][diffs['mlon_mask']].std()
-        ewall_diff_mean = diffs['ewall_diff'][diffs['mlon_mask']].mean()
-        ewall_diff_std = diffs['ewall_diff'][diffs['mlon_mask']].std()
-
-        mlon_restricted_statistics = {
-            'mlon_tn': tn, 'mlon_fn': fn, 'mlon_fp': fp, 'mlon_tp': tp, 'mlon_acc': acc, 'mlon_tpr': tpr,
-            'mlon_tnr': tnr, 'mlon_fnr': fnr, 'mlon_pwall_diff_mean': pwall_diff_mean,
-            'mlon_pwall_diff_std': pwall_diff_std, 'mlon_ewall_diff_mean': ewall_diff_mean,
-            'mlon_ewall_diff_std': ewall_diff_std
-        }
-        statistics.update(mlon_restricted_statistics)
-    return statistics
-
-
-def get_diffs(results, good_mlon_range=None, bad_mlon_range=None):
-    compare_mask = results['tec_trough'] & results['swarm_trough']
-    pwall_diff = results['swarm_pwall'][compare_mask] - results['tec_pwall'][compare_mask]
-    ewall_diff = results['swarm_ewall'][compare_mask] - results['tec_ewall'][compare_mask]
-    statistics = {'pwall_diff': pwall_diff, 'ewall_diff': ewall_diff}
-    if good_mlon_range is not None or bad_mlon_range is not None:
-        if good_mlon_range is not None:
-            mlon_mask = (results['mlon'] >= good_mlon_range[0]) & (results['mlon'] <= good_mlon_range[1])
-        else:
-            mlon_mask = ~((results['mlon'] >= bad_mlon_range[0]) & (results['mlon'] <= bad_mlon_range[1]))
-        statistics['mlon_mask'] = mlon_mask[compare_mask]
-        return pandas.DataFrame(statistics), mlon_mask
-
-    return pandas.DataFrame(statistics), None
-
-
-PARAM_SAMPLING = {
-    'tv_weight': stats.loguniform(.001, 1),
-    'l2_weight': stats.loguniform(.001, 1),
-    'bge_spatial_size': stats.randint(4, 12),
-    'bge_temporal_rad': stats.randint(0, 3),
-    'rbf_bw': stats.randint(1, 4),
-    'tv_hw': stats.randint(1, 4),
-    'tv_vw': stats.randint(1, 4),
-    'model_weight_max': stats.randint(1, 20),
-    'perimeter_th': stats.randint(10, 100),
-    'area_th': stats.randint(10, 100),
-    'artifact_key': [None, '3', '5', '7', '9'],
-    'prior_order': [1, 2],
-    'prior': ['empirical_model', 'auroral_boundary'],
-    'prior_arb_offset': stats.randint(-5, 0),
-}
-
-
-def get_random_hyperparams():
-    params = {}
-    bge_temporal_size = 0
-    bge_spatial_size = 0
-    for p in PARAM_SAMPLING:
-        if isinstance(PARAM_SAMPLING[p], list):
-            val = PARAM_SAMPLING[p][np.random.randint(len(PARAM_SAMPLING[p]))]
-        else:
-            try:
-                val = PARAM_SAMPLING[p].rvs().item()
-            except:
-                val = PARAM_SAMPLING[p].rvs()
-        if p == 'bge_temporal_rad':
-            bge_temporal_size = val * 2 + 1
-        elif p == 'bge_spatial_size':
-            bge_spatial_size = val * 2 + 1
-        else:
-            params[p] = val
-    params['bg_est_shape'] = (bge_temporal_size, bge_spatial_size, bge_spatial_size)
-    return params
 
 
 def random_parameter_search(n_experiments, n_trials, base_dir="E:\\trough_comparison"):

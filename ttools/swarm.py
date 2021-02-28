@@ -30,8 +30,6 @@ if trough:
 import numpy as np
 import bottleneck as bn
 import pandas
-from scipy.signal import convolve2d
-from scipy.stats import binned_statistic_2d
 from scipy.interpolate import interp1d
 
 from ttools import io, utils
