@@ -19,7 +19,7 @@ def get_trough_ratios(tec_troughs, swarm_troughs):
     x1, y1 = utils.polar_to_cart(swarm_troughs['e1_mlat'][mask], swarm_troughs['seg_e1_mlt'][mask])
     x2, y2 = utils.polar_to_cart(swarm_troughs['e2_mlat'][mask], swarm_troughs['e2_mlt'][mask])
     swarm_len_trough = np.hypot(x2 - x1, y2 - y1)
-    return tec_troughs.sum(), tec_troughs.size, swarm_len_total, swarm_len_trough
+    return tec_troughs.sum(), tec_troughs.size, swarm_len_trough.sum(), swarm_len_total.sum()
 
 
 def compare(times, tec_troughs, swarm_troughs, ssmlon, mlat_grid=mlat_grid, mlt_grid=mlt_grid):
@@ -35,7 +35,7 @@ def compare(times, tec_troughs, swarm_troughs, ssmlon, mlat_grid=mlat_grid, mlt_
                                                          swarm_troughs['seg_e2_mlt'], swarm_troughs['seg_e2_mlat'],
                                                          data_grids, mlt_grid, mlat_grid)
     # get length / area sums
-    tec_area_total, tec_area_trough, swarm_len_total, swarm_len_trough = get_trough_ratios(tec_troughs, swarm_troughs)
+    ta_trough, ta_total, sl_trough, sl_total = get_trough_ratios(tec_troughs, swarm_troughs)
     print("Comparing")
     results_list = []
     for t in range(swarm_troughs.shape[0]):
@@ -60,10 +60,10 @@ def compare(times, tec_troughs, swarm_troughs, ssmlon, mlat_grid=mlat_grid, mlt_
     results['swarm_ewall'] = swarm_troughs['e2_mlat'].where(down_mask, swarm_troughs['e1_mlat'])
     results['swarm_pwall'] = swarm_troughs['e1_mlat'].where(down_mask, swarm_troughs['e2_mlat'])
     results['mlon'] = (15 * seg_mlt - 180 + ssmlon[swarm_troughs['tec_ind']] + 360) % 360
-    results['tec_area_total'] = tec_area_total
-    results['tec_area_trough'] = tec_area_trough
-    results['swarm_len_total'] = swarm_len_total
-    results['swarm_len_trough'] = swarm_len_trough
+    results['tec_area_total'] = ta_total
+    results['tec_area_trough'] = ta_trough
+    results['swarm_len_total'] = sl_total
+    results['swarm_len_trough'] = sl_trough
     return results
 
 
@@ -199,8 +199,9 @@ def get_diffs(results, good_mlon_range=None, bad_mlon_range=None):
         else:
             mlon_mask = ~((results['mlon'] >= bad_mlon_range[0]) & (results['mlon'] <= bad_mlon_range[1]))
         statistics['mlon_mask'] = mlon_mask[compare_mask]
+        return pandas.DataFrame(statistics), mlon_mask
 
-    return pandas.DataFrame(statistics), mlon_mask
+    return pandas.DataFrame(statistics), None
 
 
 PARAM_SAMPLING = {
