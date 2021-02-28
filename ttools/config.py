@@ -1,15 +1,16 @@
 import os
 import h5py
 import numpy as np
+import cvxpy as cp
 
 
 base_dir = madrigal_dir = madrigal_lat = madrigal_lon = tec_dir = arb_dir = swarm_dir = swarm_coords_dir = kp_file \
-    = grid_file = mlt_vals = mlat_vals = mlt_grid = mlat_grid = PARALLEL = artifact_file = None
+    = grid_file = mlt_vals = mlat_vals = mlt_grid = mlat_grid = PARALLEL = artifact_file = SOLVER = None
 
 
 def update(_base_dir="E:\\"):
     global base_dir, madrigal_dir, madrigal_lat, madrigal_lon, tec_dir, arb_dir, swarm_dir, swarm_coords_dir
-    global kp_file, grid_file, mlt_vals, mlat_vals, mlt_grid, mlat_grid, PARALLEL, artifact_file
+    global kp_file, grid_file, mlt_vals, mlat_vals, mlt_grid, mlat_grid, PARALLEL, artifact_file, SOLVER
     base_dir = _base_dir
 
     # madrigal TEC data directory
@@ -42,6 +43,7 @@ def update(_base_dir="E:\\"):
 
     # other settings
     PARALLEL = True
+    SOLVER = cp.GUROBI
 
 
 update()

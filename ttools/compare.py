@@ -6,8 +6,7 @@ import os
 from scipy import stats
 import time
 
-from ttools import io, swarm, rbf_inversion, utils
-from ttools.config import mlat_grid, mlt_grid
+from ttools import io, swarm, rbf_inversion, utils, config
 
 
 def get_trough_ratios(tec_troughs, swarm_troughs):
@@ -21,7 +20,11 @@ def get_trough_ratios(tec_troughs, swarm_troughs):
     return tec_troughs.sum(), tec_troughs.size, swarm_len_trough.sum(), swarm_len_total.sum()
 
 
-def compare(times, tec_troughs, swarm_troughs, ssmlon, mlat_grid=mlat_grid, mlt_grid=mlt_grid):
+def compare(times, tec_troughs, swarm_troughs, ssmlon, mlat_grid=None, mlt_grid=None):
+    if mlat_grid is None:
+        mlat_grid = config.mlat_grid
+    if mlt_grid is None:
+        mlt_grid = config.mlt_grid
     # get segment MLT
     t1 = swarm_troughs['seg_e1_mlt'].values * np.pi / 12
     t2 = swarm_troughs['seg_e2_mlt'].values * np.pi / 12
@@ -187,10 +190,10 @@ def run_single_day(date, bg_est_shape=(3, 15, 15), model_weight_max=20, rbf_bw=1
     if make_plots:
         import matplotlib.pyplot as plt
         from ttools import plotting
-        data_grids = [mlat_grid, x[swarm_troughs['tec_ind']]]
+        data_grids = [config.mlat_grid, x[swarm_troughs['tec_ind']]]
         mlat_profs, x_profs = utils.get_grid_slice_line(swarm_troughs['seg_e1_mlt'], swarm_troughs['seg_e1_mlat'],
                                                         swarm_troughs['seg_e2_mlt'], swarm_troughs['seg_e2_mlat'],
-                                                        data_grids, mlt_grid, mlat_grid)
+                                                        data_grids, config.mlt_grid, config.mlat_grid)
         trimmed_tec, = utils.moving_func_trim(bg_est_shape[0], tec)
         for t in range(len(comparison_times)):
             polar_fig, polar_ax = plt.subplots(1, 3, figsize=(18, 10), subplot_kw=dict(projection='polar'),
@@ -199,7 +202,7 @@ def run_single_day(date, bg_est_shape=(3, 15, 15), model_weight_max=20, rbf_bw=1
             swarm_troughs_t, swarm_segments_t, m_p, x_p = plotting.prepare_swarm_line_plot(t, swarm_segments,
                                                                                            swarm_troughs, mlat_profs,
                                                                                            x_profs)
-            plotting.plot_all(polar_ax, line_ax, mlat_grid, mlt_grid, trimmed_tec[t], x[t],
+            plotting.plot_all(polar_ax, line_ax, config.mlat_grid, config.mlt_grid, trimmed_tec[t], x[t],
                               swarm_troughs_t, tec_troughs[t], swarm_segments_t, m_p, x_p, ssmlon[t], arb[t])
             polar_fig.savefig(os.path.join(plot_dir, f"{comparison_times[t].astype('datetime64[D]')}_{t}_polar.png"))
             line_fig.savefig(os.path.join(plot_dir, f"{comparison_times[t].astype('datetime64[D]')}_{t}_line.png"))

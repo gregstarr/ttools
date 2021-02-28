@@ -179,14 +179,10 @@ def run_single(u, basis, x, tv, l2, t, output_shape):
     total_cost = main_cost + tv_cost + l2_cost
     prob = cp.Problem(cp.Minimize(total_cost), [u >= 0])
     try:
-        prob.solve(solver=cp.GUROBI)
+        prob.solve(solver=config.SOLVER)
     except Exception as e:
-        try:
-            print("GUROBI FAILED, RUNNING AGAIN VERBOSE:", e)
-            prob.solve(solver=cp.GUROBI, verbose=True)
-        except Exception as e:
-            print("GUROBI FAILED, USING ECOS:", e)
-            prob.solve(solver=cp.ECOS)
+        print("FAILED, USING ECOS:", e)
+        prob.solve(solver=cp.ECOS)
     return u.value.reshape(output_shape)
 
 
