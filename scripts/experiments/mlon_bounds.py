@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ttools import utils, io, config
+from ttools import io, config
 
 plt.style.use('ggplot')
 

@@ -94,6 +94,21 @@ def test_get_enter_exit_data():
     assert np.all(mlat[fin_ind[ends - 1]] <= 75)
 
 
+def test_get_enter_exit_missing():
+    N = 1000
+    periods = 2.5
+    mlat = signal.sawtooth(np.linspace(0, 2 * periods * np.pi, N), .5) * 5 + 5
+    mlat[500:750] = np.nan
+    # nominal front
+    enter_mask = mlat >= 3
+    exit_mask = mlat > 7
+    starts, ends = swarm.get_region_bounds(enter_mask, exit_mask)
+    assert np.all(mlat[starts] >= 3)
+    assert np.all(mlat[starts - 1] < 3)
+    assert np.all(mlat[ends] > 7)
+    assert np.all(mlat[ends - 1] <= 7)
+
+
 def test_get_closest_segment():
     start_date = np.datetime64("2015-10-07T06:00:00")
     end_date = np.datetime64("2015-10-07T12:00:00.000")

@@ -6,7 +6,7 @@ import os
 from scipy import stats
 import time
 
-from ttools import io, swarm, rbf_inversion, utils, config
+from ttools import io, swarm, rbf_inversion, utils, config, convert
 
 
 def get_trough_ratios(tec_troughs, swarm_troughs):
@@ -28,7 +28,7 @@ def compare(times, tec_troughs, swarm_troughs, ssmlon, mlat_grid=None, mlt_grid=
     # get segment MLT
     t1 = swarm_troughs['seg_e1_mlt'].values * np.pi / 12
     t2 = swarm_troughs['seg_e2_mlt'].values * np.pi / 12
-    seg_mlt = utils.average_angles(t1, t2) * 24 / np.pi
+    seg_mlt = utils.average_angles(t1, t2) * 12 / np.pi
 
     # get mlat and trough slices
     print("Getting grid slices")
@@ -36,8 +36,7 @@ def compare(times, tec_troughs, swarm_troughs, ssmlon, mlat_grid=None, mlt_grid=
     mlat_profs, trough_profs = utils.get_grid_slice_line(swarm_troughs['seg_e1_mlt'], swarm_troughs['seg_e1_mlat'],
                                                          swarm_troughs['seg_e2_mlt'], swarm_troughs['seg_e2_mlat'],
                                                          data_grids, mlt_grid, mlat_grid)
-    # get length / area sums
-    ta_trough, ta_total, sl_trough, sl_total = get_trough_ratios(tec_troughs, swarm_troughs)
+
     print("Comparing")
     results_list = []
     for t in range(swarm_troughs.shape[0]):
@@ -61,11 +60,7 @@ def compare(times, tec_troughs, swarm_troughs, ssmlon, mlat_grid=None, mlt_grid=
     results['swarm_trough'] = swarm_troughs['trough']
     results['swarm_ewall'] = swarm_troughs['e2_mlat'].where(down_mask, swarm_troughs['e1_mlat'])
     results['swarm_pwall'] = swarm_troughs['e1_mlat'].where(down_mask, swarm_troughs['e2_mlat'])
-    results['mlon'] = (15 * seg_mlt - 180 + ssmlon[swarm_troughs['tec_ind']] + 360) % 360
-    results['tec_area_total'] = ta_total
-    results['tec_area_trough'] = ta_trough
-    results['swarm_len_total'] = sl_total
-    results['swarm_len_trough'] = sl_trough
+    results['mlon'] = convert.mlt_to_mlon_sub(seg_mlt, ssmlon[swarm_troughs['tec_ind']])
     return results
 
 

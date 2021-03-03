@@ -1,5 +1,6 @@
 import numpy as np
-import matplotlib.pyplot as plt
+
+from ttools import convert
 
 
 def format_polar_mag_ax(ax):
@@ -49,7 +50,7 @@ def polar_pcolormesh(ax, mlat, mlt, value, cs='mlt', **kwargs):
 
 def plot_mlon_lines(ax, ssmlon, mlons=np.arange(0, 360, 45)):
     for mlon in mlons:
-        mlt = ((mlon - ssmlon + 180) / 15) % 24
+        mlt = convert.mlon_to_mlt_sub(mlon, ssmlon)
         theta = np.pi * (mlt - 6) / 12
         ax.plot([theta, theta], [0, 60], '--', color='grey')
         ax.annotate(str(mlon), (theta, 58))
