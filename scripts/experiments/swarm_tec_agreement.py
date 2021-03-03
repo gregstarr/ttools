@@ -9,7 +9,7 @@ Experiment 1: swarm tec correlation
 import numpy as np
 import pandas
 
-from ttools import io, rbf_inversion, swarm, utils, config
+from ttools import io, rbf_inversion, swarm, utils, config, convert
 
 
 def run_experiment(n, bg_est_shape, artifact_key):
@@ -68,8 +68,8 @@ def run_day(date, bg_est_shape, artifact_key):
                                                     data_grids, config.mlt_grid, config.mlat_grid, linewidth=3)
     t1 = swarm_troughs['seg_e1_mlt'].values * np.pi / 12
     t2 = swarm_troughs['seg_e2_mlt'].values * np.pi / 12
-    seg_mlt = utils.average_angles(t1, t2) * 24 / np.pi
-    mlon = (15 * seg_mlt - 180 + ssmlon[swarm_troughs['tec_ind']] + 360) % 360
+    seg_mlt = utils.average_angles(t1, t2) * 12 / np.pi
+    mlon = convert.mlt_to_mlon_sub(seg_mlt, ssmlon[swarm_troughs['tec_ind']])
     mlon_mask = ~((mlon >= 130) & (mlon <= 260))
     x_list = []
     dne_list = []
@@ -97,7 +97,7 @@ if __name__ == "__main__":
     data = []
     mlat_data = []
 
-    n = 20
+    n = 50
     for i, (bg_size, artifact_key) in enumerate(itertools.product(bg_sizes, artifact_keys)):
         print(bg_size, artifact_key)
         mean, cov, mlat_mean, mlat_cov = run_experiment(n, (1, bg_size, bg_size), artifact_key)
