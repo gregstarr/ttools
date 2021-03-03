@@ -189,6 +189,6 @@ def test_random_parameter_search():
         for f in [overall_stats_fn, exp_0_params_fn, exp_0_results_fn]:
             assert os.path.exists(f)
         overall_stats = pandas.read_csv(overall_stats_fn)
-        assert overall_stats.shape == (1, 39)
+        assert overall_stats.shape == (1, 27)
         exp_0_results = pandas.read_csv(exp_0_results_fn)
         assert exp_0_results.shape == (24 * 6, 13)

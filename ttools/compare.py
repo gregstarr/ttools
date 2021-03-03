@@ -78,17 +78,10 @@ def get_comparison_stats(results):
     ewall_diff_mean = diffs['ewall_diff'].mean()
     ewall_diff_std = diffs['ewall_diff'].std()
 
-    tec_area_total = results['tec_area_total'].sum()
-    tec_area_trough = results['tec_area_trough'].sum()
-    swarm_len_total = results['swarm_len_total'].sum()
-    swarm_len_trough = results['swarm_len_trough'].sum()
-
     statistics = {
         'tn': tn, 'fn': fn, 'fp': fp, 'tp': tp, 'acc': acc, 'tpr': tpr, 'tnr': tnr, 'fnr': fnr, 'fpr': fpr,
         'pwall_diff_mean': pwall_diff_mean, 'pwall_diff_std': pwall_diff_std, 'ewall_diff_mean': ewall_diff_mean,
-        'ewall_diff_std': ewall_diff_std, 'tec_area_total': tec_area_total, 'tec_area_trough': tec_area_trough,
-        'swarm_len_total': swarm_len_total, 'swarm_len_trough': swarm_len_trough,
-        'tec_area_ratio': tec_area_trough / tec_area_total, 'swarm_len_ratio': swarm_len_trough / swarm_len_total
+        'ewall_diff_std': ewall_diff_std
     }
     return statistics
 
