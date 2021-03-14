@@ -12,6 +12,9 @@ import pandas
 from ttools import io, rbf_inversion, swarm, utils, config, convert
 
 
+LW = 9
+
+
 def run_experiment(n, bg_est_shape, artifact_key):
     start_date = np.datetime64("2014-01-01")
     end_date = np.datetime64("2020-01-01")
@@ -65,7 +68,7 @@ def run_day(date, bg_est_shape, artifact_key):
     data_grids = [config.mlat_grid, x[swarm_troughs['tec_ind']]]
     mlat_profs, x_profs = utils.get_grid_slice_line(swarm_troughs['seg_e1_mlt'], swarm_troughs['seg_e1_mlat'],
                                                     swarm_troughs['seg_e2_mlt'], swarm_troughs['seg_e2_mlat'],
-                                                    data_grids, config.mlt_grid, config.mlat_grid, linewidth=3)
+                                                    data_grids, config.mlt_grid, config.mlat_grid, linewidth=LW)
     t1 = swarm_troughs['seg_e1_mlt'].values * np.pi / 12
     t2 = swarm_troughs['seg_e2_mlt'].values * np.pi / 12
     seg_mlt = utils.average_angles(t1, t2) * 12 / np.pi
@@ -97,7 +100,7 @@ if __name__ == "__main__":
     data = []
     mlat_data = []
 
-    n = 50
+    n = 100
     for i, (bg_size, artifact_key) in enumerate(itertools.product(bg_sizes, artifact_keys)):
         print(bg_size, artifact_key)
         mean, cov, mlat_mean, mlat_cov = run_experiment(n, (1, bg_size, bg_size), artifact_key)
@@ -110,6 +113,9 @@ if __name__ == "__main__":
     print(data)
     print(mlat_data)
 
+    data.to_csv(f"E:\\swarm_tec_agreement\\data{LW}.csv")
+    mlat_data.to_csv(f"E:\\swarm_tec_agreement\\mlat_data{LW}.csv")
+
     corr = data['s01'].values.reshape((len(bg_sizes), len(artifact_keys)))
     plt.figure()
     plt.imshow(corr, cmap='Blues')
@@ -118,6 +124,8 @@ if __name__ == "__main__":
     plt.xlabel('Artifact removal filter size')
     plt.yticks(np.arange(len(bg_sizes)), bg_sizes)
     plt.ylabel('Background estimation filter size')
+    plt.savefig(f"E:\\swarm_tec_agreement\\corr{LW}.png")
+    plt.close()
 
     mlat_cov = mlat_data['s01'].values.reshape((len(bg_sizes), len(artifact_keys)))
     plt.figure()
@@ -127,6 +135,8 @@ if __name__ == "__main__":
     plt.xlabel('Artifact removal filter size')
     plt.yticks(np.arange(len(bg_sizes)), bg_sizes)
     plt.ylabel('Background estimation filter size')
+    plt.savefig(f"E:\\swarm_tec_agreement\\mlat_cov{LW}.png")
+    plt.close()
 
     mlat_corr = (mlat_data['s01'] / (np.sqrt(mlat_data['s00']) * np.sqrt(mlat_data['s11']))).values.reshape(
         (len(bg_sizes), len(artifact_keys)))
@@ -137,5 +147,5 @@ if __name__ == "__main__":
     plt.xlabel('Artifact removal filter size')
     plt.yticks(np.arange(len(bg_sizes)), bg_sizes)
     plt.ylabel('Background estimation filter size')
-
-    plt.show()
+    plt.savefig(f"E:\\swarm_tec_agreement\\mlat_corr{LW}.png")
+    plt.close()
