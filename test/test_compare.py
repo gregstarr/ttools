@@ -15,15 +15,17 @@ nmlat = 20
 def trough_setup():
     """perfect match, swarm bigger, tec bigger, offset, swarm, tec, neither"""
     mlt_grid, mlat_grid = np.meshgrid(np.arange(-12, 12, 24 / nmlt), np.arange(30, 90, 60 / nmlat))
-    columns = ['seg_e1_mlat', 'seg_e1_mlt', 'seg_e2_mlat', 'seg_e2_mlt', 'trough', 'e1_mlat', 'e2_mlat', 'e1_mlt',
-               'e2_mlt', 'sat', 'tec_ind']
-    swarm_troughs = pandas.DataFrame(index=np.arange(T), columns=columns)
+    swarm_troughs = pandas.DataFrame(index=np.arange(T))
     swarm_troughs['sat'] = 'A'
     swarm_troughs['seg_e1_mlat'] = 45
     swarm_troughs['seg_e2_mlat'] = 75
     swarm_troughs['seg_e1_mlt'] = 0
     swarm_troughs['seg_e2_mlt'] = 0
     swarm_troughs['tec_ind'] = np.arange(T)
+    min_dne = np.zeros(7)
+    min_dne[:5] = -.5
+    swarm_troughs['min_dne'] = min_dne
+    swarm_troughs['direction'] = 'up'
 
     trough = np.zeros(T, dtype=bool)
     trough[:5] = True
@@ -63,14 +65,6 @@ def results(trough_setup):
 def dmlat(trough_setup):
     tec_troughs, swarm_troughs, mlat_grid, mlt_grid = trough_setup
     yield mlat_grid[1, 0] - mlat_grid[0, 0]
-
-
-def test_get_trough_ratios(trough_setup):
-    tec_troughs, swarm_troughs, mlat_grid, mlt_grid = trough_setup
-    ta_trough, ta_total, sl_trough, sl_total = compare.get_trough_ratios(tec_troughs, swarm_troughs)
-    assert ta_total == tec_troughs.size
-    assert ta_trough == 2 * 20 + 2 * 20 + 4 * 20 + 2 * 10 + 2 * 20
-    assert sl_trough / sl_total == pytest.approx((10 + (1 + 3 + 1 + 1) * (60 / nmlat)) / 210)
 
 
 def test_compare(results):
@@ -191,4 +185,4 @@ def test_random_parameter_search():
         overall_stats = pandas.read_csv(overall_stats_fn)
         assert overall_stats.shape == (1, 27)
         exp_0_results = pandas.read_csv(exp_0_results_fn)
-        assert exp_0_results.shape == (24 * 6, 9)
+        assert exp_0_results.shape == (24 * 6, 13)

@@ -1,6 +1,5 @@
 import pandas
 import numpy as np
-from scipy import stats
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -8,7 +7,7 @@ from ttools import compare
 
 plt.style.use('seaborn')
 
-results = pandas.read_csv("E:\\temp_comparison_results\\results2.csv")
+results = pandas.read_csv("E:\\temp_comparison_results\\results.csv")
 mlon_mask = ~((results['mlon'] >= 130) & (results['mlon'] <= 260))
 mlon_ind, = np.nonzero(mlon_mask.values)
 diffs = compare.get_diffs(results[mlon_mask])

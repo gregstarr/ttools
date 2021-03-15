@@ -9,17 +9,6 @@ import time
 from ttools import io, swarm, rbf_inversion, utils, config, convert
 
 
-def get_trough_ratios(tec_troughs, swarm_troughs):
-    x1, y1 = utils.polar_to_cart(swarm_troughs['seg_e1_mlat'], swarm_troughs['seg_e1_mlt'])
-    x2, y2 = utils.polar_to_cart(swarm_troughs['seg_e2_mlat'], swarm_troughs['seg_e2_mlt'])
-    swarm_len_total = np.hypot(x2 - x1, y2 - y1)
-    mask = swarm_troughs['trough']
-    x1, y1 = utils.polar_to_cart(swarm_troughs['e1_mlat'][mask], swarm_troughs['seg_e1_mlt'][mask])
-    x2, y2 = utils.polar_to_cart(swarm_troughs['e2_mlat'][mask], swarm_troughs['e2_mlt'][mask])
-    swarm_len_trough = np.hypot(x2 - x1, y2 - y1)
-    return tec_troughs.sum(), tec_troughs.size, swarm_len_trough.sum(), swarm_len_total.sum()
-
-
 def compare(times, tec_troughs, swarm_troughs, ssmlon, mlat_grid=None, mlt_grid=None):
     if mlat_grid is None:
         mlat_grid = config.mlat_grid
@@ -33,12 +22,14 @@ def compare(times, tec_troughs, swarm_troughs, ssmlon, mlat_grid=None, mlt_grid=
     # get mlat and trough slices
     print("Getting grid slices")
     data_grids = [mlat_grid, tec_troughs[swarm_troughs['tec_ind']]]
-    mlat_profs, trough_profs = utils.get_grid_slice_line(swarm_troughs['seg_e1_mlt'], swarm_troughs['seg_e1_mlat'],
-                                                         swarm_troughs['seg_e2_mlt'], swarm_troughs['seg_e2_mlat'],
+    mlat_profs, trough_profs = utils.get_grid_slice_line(swarm_troughs['seg_e1_mlt'].values, swarm_troughs['seg_e1_mlat'].values,
+                                                         swarm_troughs['seg_e2_mlt'].values, swarm_troughs['seg_e2_mlat'].values,
                                                          data_grids, mlt_grid, mlat_grid)
 
     print("Comparing")
-    results_list = []
+    tec_trough_found_list = []
+    tec_e1_list = []
+    tec_e2_list = []
     for t in range(swarm_troughs.shape[0]):
         tec_trough_mask = trough_profs[t] > 0
         tec_trough_found = tec_trough_mask.any()
@@ -46,22 +37,48 @@ def compare(times, tec_troughs, swarm_troughs, ssmlon, mlat_grid=None, mlt_grid=
         tec_e2 = 0
         if tec_trough_found:
             tec_e1, tec_e2 = mlat_profs[t][np.argwhere(tec_trough_mask)[[0, -1], 0]]
-        result = (tec_trough_found, tec_e1, tec_e2, times[swarm_troughs['tec_ind'][t]])
-        results_list.append(result)
+        tec_trough_found_list.append(tec_trough_found)
+        tec_e1_list.append(tec_e1)
+        tec_e2_list.append(tec_e2)
 
     # compile results
-    pre_results = pandas.DataFrame(data=results_list, columns=['tec_trough', 'tec_e1', 'tec_e2', 'time'])
-    results = pandas.DataFrame()
-    down_mask = np.round(swarm_troughs['seg_e1_mlat'].values) == 75
-    results['time'] = pre_results['time']
-    results['tec_trough'] = pre_results['tec_trough']
-    results['tec_ewall'] = pre_results['tec_e2'].where(down_mask, pre_results['tec_e1'])
-    results['tec_pwall'] = pre_results['tec_e1'].where(down_mask, pre_results['tec_e2'])
-    results['swarm_trough'] = swarm_troughs['trough']
-    results['swarm_ewall'] = swarm_troughs['e2_mlat'].where(down_mask, swarm_troughs['e1_mlat'])
-    results['swarm_pwall'] = swarm_troughs['e1_mlat'].where(down_mask, swarm_troughs['e2_mlat'])
-    results['mlon'] = convert.mlt_to_mlon_sub(seg_mlt, ssmlon[swarm_troughs['tec_ind']])
-    return results
+    pre_results = pandas.DataFrame()
+    pre_results['time'] = times[swarm_troughs['tec_ind']]
+    pre_results['sat'] = swarm_troughs['sat']
+    pre_results['swarm_dne'] = swarm_troughs['min_dne']
+    pre_results['direction'] = swarm_troughs['direction']
+    pre_results['tec_trough'] = np.array(tec_trough_found_list)
+    pre_results['tec_ewall'] = np.where(swarm_troughs['direction'] == 'up', tec_e1_list, tec_e2_list)
+    pre_results['tec_pwall'] = np.where(swarm_troughs['direction'] == 'up', tec_e2_list, tec_e1_list)
+    pre_results['swarm_trough'] = swarm_troughs['trough']
+    pre_results['swarm_ewall'] = np.where(swarm_troughs['direction'] == 'up', swarm_troughs['e1_mlat'], swarm_troughs['e2_mlat'])
+    pre_results['swarm_pwall'] = np.where(swarm_troughs['direction'] == 'up', swarm_troughs['e2_mlat'], swarm_troughs['e1_mlat'])
+    pre_results['mlon'] = convert.mlt_to_mlon_sub(seg_mlt, ssmlon[swarm_troughs['tec_ind']])
+    pre_results['id'] = np.arange(swarm_troughs.shape[0])
+
+    # process the pre_results: output should be a single up / down for each satellite for each tec map
+    # optionally only consider proper SWARM troughs
+    results = []
+    for t in times:
+        for sat in np.unique(swarm_troughs['sat']):
+            for direction in np.unique(swarm_troughs['direction']):
+                mask = (pre_results['time'] == t) & (pre_results['sat'] == sat) & (pre_results['direction'] == direction)
+                candidates = pre_results[mask]
+                if not candidates['tec_trough'].iloc[0]:
+                    # if no tec trough, use normal swarm defn
+                    if candidates['swarm_trough'].any():
+                        results.append(candidates[candidates['swarm_trough']].sort_values('swarm_ewall').iloc[0])
+                    else:
+                        results.append(candidates.iloc[0])
+                else:
+                    # if there is tec trough, find best swarm trough
+                    if not candidates['swarm_trough'].any():
+                        results.append(candidates.iloc[0])
+                    else:
+                        scores = abs(candidates['swarm_ewall'] - candidates['tec_ewall']) + abs(candidates['swarm_pwall'] - candidates['tec_pwall'])
+                        idx = np.argmin(scores.values[candidates['swarm_trough'].values])
+                        results.append(candidates[candidates['swarm_trough']].iloc[idx])
+    return pandas.DataFrame(results)
 
 
 def get_comparison_stats(results):
@@ -175,12 +192,15 @@ def run_single_day(date, bg_est_shape=(3, 15, 15), model_weight_max=20, rbf_bw=1
     swarm_segments = swarm.get_segments_data(comparison_times)
     swarm_troughs = swarm.get_swarm_troughs(swarm_segments)
 
+    results = compare(comparison_times, tec_troughs, swarm_troughs, ssmlon)
+
     if make_plots:
         import matplotlib.pyplot as plt
         from ttools import plotting
+        swarm_troughs = swarm_troughs.iloc[results['id']]
         data_grids = [config.mlat_grid, x[swarm_troughs['tec_ind']]]
-        mlat_profs, x_profs = utils.get_grid_slice_line(swarm_troughs['seg_e1_mlt'], swarm_troughs['seg_e1_mlat'],
-                                                        swarm_troughs['seg_e2_mlt'], swarm_troughs['seg_e2_mlat'],
+        mlat_profs, x_profs = utils.get_grid_slice_line(swarm_troughs['seg_e1_mlt'].values, swarm_troughs['seg_e1_mlat'].values,
+                                                        swarm_troughs['seg_e2_mlt'].values, swarm_troughs['seg_e2_mlat'].values,
                                                         data_grids, config.mlt_grid, config.mlat_grid)
         trimmed_tec, = utils.moving_func_trim(bg_est_shape[0], tec)
         for t in range(len(comparison_times)):
@@ -197,7 +217,7 @@ def run_single_day(date, bg_est_shape=(3, 15, 15), model_weight_max=20, rbf_bw=1
             plt.close(polar_fig)
             plt.close(line_fig)
 
-    return compare(comparison_times, tec_troughs, swarm_troughs, ssmlon)
+    return results
 
 
 def run_n_random_days(n, start_date=np.datetime64("2014-01-01"), end_date=np.datetime64("2020-01-01"),

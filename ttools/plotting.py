@@ -1,6 +1,6 @@
 import numpy as np
 
-from ttools import convert
+from ttools import convert, swarm
 
 
 def format_polar_mag_ax(ax):

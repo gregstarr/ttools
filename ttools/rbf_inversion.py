@@ -173,6 +173,8 @@ def get_optimization_args(x, times, mlt_vals=None, mlat_grid=None, model_weight_
 
 def run_single(u, basis, x, tv, l2, t, output_shape):
     print(t)
+    if x.size == 0:
+        return np.zeros(output_shape)
     main_cost = u.T @ basis.T @ x
     tv_cost = cp.norm1(tv @ u)
     l2_cost = l2 @ (u ** 2)

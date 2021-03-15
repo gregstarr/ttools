@@ -144,7 +144,7 @@ def test_find_troughs_in_segment_nominal():
     smooth_dne[50:75] = np.linspace(-2.1, -.1, 25)  # 75 is 0, min at 50
     trough = swarm.find_troughs_in_segment(mlat, smooth_dne, threshold, width_max=50)
     assert trough
-    tmin, e1, e2 = trough
+    tmin, e1, e2 = trough[0]
     assert e1 == 26
     assert e2 == 75
     assert tmin == 50
@@ -161,7 +161,7 @@ def test_find_troughs_in_segment_missing_1():
     smooth_dne[10:20] = np.nan
     trough = swarm.find_troughs_in_segment(mlat, smooth_dne, threshold, width_max=50)
     assert trough
-    tmin, e1, e2 = trough
+    tmin, e1, e2 = trough[0]
     assert e1 == 26
     assert e2 == 75
     assert tmin == 50
@@ -178,7 +178,7 @@ def test_find_troughs_in_segment_missing_2():
     smooth_dne[60:70] = np.nan
     trough = swarm.find_troughs_in_segment(mlat, smooth_dne, threshold, width_max=50)
     assert trough
-    tmin, e1, e2 = trough
+    tmin, e1, e2 = trough[0]
     assert e1 == 26
     assert e2 == 75
     assert tmin == 50
@@ -196,7 +196,7 @@ def test_find_troughs_in_segment_missing_3():
     trough = swarm.find_troughs_in_segment(mlat, smooth_dne, threshold, width_max=50)
     assert not trough
     trough = swarm.find_troughs_in_segment(mlat, smooth_dne, threshold, width_max=60)
-    tmin, e1, e2 = trough
+    tmin, e1, e2 = trough[0]
     assert e1 == 26
     assert e2 == 80
     assert tmin == 50
@@ -222,7 +222,7 @@ def test_find_troughs_in_segment_data():
         back_trough = swarm.find_troughs_in_segment(mlat[fin_mask][back], smooth_dne[fin_mask][back], threshold)
         for side, trough in zip([front, back], [front_trough, back_trough]):
             if trough:
-                min_idx, edge1, edge2 = trough
+                min_idx, edge1, edge2 = trough[0]
                 assert np.any(smooth_dne[fin_mask][side][min_idx] < threshold)
                 assert edge1 <= min_idx <= edge2
 
@@ -268,5 +268,9 @@ def test_get_swarm_troughs():
         sat = t['sat']
         direction = 'up' if abs(t['seg_e1_mlat'] - 45) < 2 else 'down'
         i = t['tec_ind']
+        if direction == 'up':
+            mask = (segments[sat][direction][i]['mlat'] >= t['e1_mlat']) & (segments[sat][direction][i]['mlat'] <= t['e2_mlat'])
+        else:
+            mask = (segments[sat][direction][i]['mlat'] >= t['e2_mlat']) & (segments[sat][direction][i]['mlat'] <= t['e1_mlat'])
         print(_, np.any(segments[sat][direction][i]['smooth_dne'] < -.2), t['trough'])
-        assert np.any(segments[sat][direction][i]['smooth_dne'] < -.2) == t['trough']
+        assert np.any(segments[sat][direction][i]['smooth_dne'][mask] < -.2) == t['trough']

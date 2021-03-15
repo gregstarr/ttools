@@ -187,7 +187,8 @@ def get_grid_slice_line(x1, y1, x2, y2, data_grids, x_grid, y_grid, **profile_li
     xi1, yi1 = get_grid_coords(x1, y1, x_grid, y_grid)
     xi2, yi2 = get_grid_coords(x2, y2, x_grid, y_grid)
 
-    xi2[abs(xi1 - xi2) > x_grid.shape[1] // 2] += x_grid.shape[1]
+    mask = abs(xi1 - xi2) > x_grid.shape[1] // 2
+    xi2[mask] += np.sign(xi1 - xi2)[mask] * x_grid.shape[1]
 
     results = [[] for _ in data_grids]
     for t in range(len(xi1)):

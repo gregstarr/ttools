@@ -9,7 +9,7 @@ if __name__ == "__main__":
     from ttools import compare
 
     params = {
-        'bg_est_shape': (1, 19, 19),
+        'bg_est_shape': (1, 17, 17),
         'model_weight_max': 15,
         'rbf_bw': 1,
         'tv_hw': 2,
@@ -18,7 +18,7 @@ if __name__ == "__main__":
         'tv_weight': .15,
         'perimeter_th': 40,
         'area_th': 40,
-        'artifact_key': '3',
+        'artifact_key': '7',
         'auroral_boundary': True,
         'prior_order': 1,
         'prior': 'auroral_boundary',

@@ -91,9 +91,9 @@ def test_get_grid_slice_line():
     assert len(results) == 2
     dprofs1, dprofs2 = results
     assert np.all(dprofs1[0] == [2, 3, 4, 5, 6])
-    assert np.all(dprofs1[1] == [2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3])
+    assert np.all(dprofs1[1] == [2, 3])
     assert np.all(dprofs2[0] == [0, 0, 0, 0, 0])
-    assert np.all(dprofs2[1] == [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+    assert np.all(dprofs2[1] == [1, 1])
     assert np.all(dprofs2[2] == 2)
 
     prof, = utils.get_grid_slice_line([0], [1], [5], [5], [np.roll(dgrid_1, 3, 1)], x_grid, y_grid, linewidth=1)

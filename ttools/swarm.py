@@ -161,13 +161,14 @@ def get_region_bounds(enter_mask, exit_mask):
     return starts[start_pick_ind], ends[end_pick_mask][end_pick_ind]
 
 
-def find_troughs_in_segment(mlat, smooth_dne, threshold=-.2, width_min=1, width_max=17, fin_rmin=.25):
+def find_troughs_in_segment(mlat, smooth_dne, threshold=-.2, width_min=1, width_max=17,
+                            fin_rmin=.25):
     """find troughs in a 45-75 segment. `mlat` contains no NaNs, smooth_dne may contain NaNs.
 
     Parameters
     ----------
     mlat, smooth_dne: numpy.ndarray[float]
-    threshold, width_min, width_max: float
+    threshold, width_min, width_max, fin_rmin: float
 
     Returns
     -------
@@ -175,6 +176,7 @@ def find_troughs_in_segment(mlat, smooth_dne, threshold=-.2, width_min=1, width_
         - if trough: min_idx, edge_1, edge_2
         - if no trough: False
     """
+    trough_candidates = []
     # fill NaNs
     fin_mask = np.isfinite(smooth_dne)
     smooth_dne_i = smooth_dne.copy()  # i for interpolated
@@ -201,16 +203,8 @@ def find_troughs_in_segment(mlat, smooth_dne, threshold=-.2, width_min=1, width_
         min_idx = edge_1 + np.nanargmin(smooth_dne_i[edge_1:edge_2])
         dne_min = smooth_dne_i[min_idx]
         if dne_min <= threshold:
-            # found a trough: return indices of min and walls
-            return min_idx, edge_1, edge_2
-    return False
-
-
-def unpack_trough(mlat, mlt, smooth_dne, trough):
-    if trough:
-        min_idx, e1_idx, e2_idx = trough
-        return True, mlat[min_idx], mlt[min_idx], smooth_dne[min_idx], mlat[e1_idx], mlt[e1_idx], mlat[e2_idx], mlt[e2_idx]
-    return False, 0, 0, 0, 0, 0, 0, 0
+            trough_candidates.append((min_idx, edge_1, edge_2))
+    return trough_candidates
 
 
 def get_segments_data(tec_times):
@@ -273,12 +267,19 @@ def get_swarm_troughs(swarm_segments):
     for sat, sat_segments in swarm_segments.items():
         for direction, segments in sat_segments.items():
             for i, segment in enumerate(segments):
-                trough = find_troughs_in_segment(segment['mlat'], segment['smooth_dne'])
-                trough_unpacked = unpack_trough(segment['mlat'], segment['mlt'], segment['smooth_dne'], trough)
+                trough_candidates = find_troughs_in_segment(segment['mlat'], segment['smooth_dne'])
+                data_rows = []
                 seg_info = (sat, segment['mlat'][0], segment['mlt'][0], segment['mlat'][-1], segment['mlt'][-1], i,
                             direction)
-                data_row = trough_unpacked + seg_info
-                swarm_troughs.append(data_row)
+                trough_unpacked = (False, 0, 0, 0, 0, 0, 0, 0)
+                data_rows.append(trough_unpacked + seg_info)
+                for tc in trough_candidates:
+                    min_idx, e1_idx, e2_idx = tc
+                    trough_unpacked = (True, segment['mlat'][min_idx], segment['mlt'][min_idx],
+                                       segment['smooth_dne'][min_idx], segment['mlat'][e1_idx], segment['mlt'][e1_idx],
+                                       segment['mlat'][e2_idx], segment['mlt'][e2_idx])
+                    data_rows.append(trough_unpacked + seg_info)
+                swarm_troughs += data_rows
     swarm_troughs = pandas.DataFrame(data=swarm_troughs,
                                      columns=['trough', 'min_mlat', 'min_mlt', 'min_dne', 'e1_mlat', 'e1_mlt',
                                               'e2_mlat', 'e2_mlt', 'sat', 'seg_e1_mlat', 'seg_e1_mlt', 'seg_e2_mlat',
