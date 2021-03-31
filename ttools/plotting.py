@@ -1,21 +1,22 @@
 import numpy as np
 
-from ttools import convert, swarm
+from ttools import convert
 
 
-def format_polar_mag_ax(ax):
+def format_polar_mag_ax(ax, tick_color='black'):
     if isinstance(ax, np.ndarray):
         for a in ax.flatten():
             format_polar_mag_ax(a)
     else:
-        ax.tick_params(axis='both', which='both', bottom=False, top=False, left=False, right=False, labelbottom=False, labeltop=False, labelleft=False, labelright=False)
+        ax.tick_params(axis='both', which='both', bottom=False, top=False, left=False, right=False, labelbottom=False,
+                       labeltop=False, labelleft=False, labelright=False)
         ax.set_ylim(0, 60)
         ax.set_xticks(np.arange(8) * np.pi/4)
         ax.set_xticklabels((np.arange(8) * 3 + 6) % 24)
         ax.set_yticks([10, 20, 30, 40, 50])
         ax.set_yticklabels([80, 70, 60, 50, 40])
-        ax.tick_params(axis='x', which='both', bottom=True, labelbottom=True)
-        ax.tick_params(axis='y', which='both', left=True, labelleft=True, width=0, length=0)
+        ax.tick_params(axis='x', which='both', bottom=True, labelbottom=True, colors=tick_color)
+        ax.tick_params(axis='y', which='both', left=True, labelleft=True, width=0, length=0, colors=tick_color)
         ax.set_rlabel_position(80)
         ax.grid(True)
 

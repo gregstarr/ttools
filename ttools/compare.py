@@ -5,6 +5,7 @@ from sklearn.metrics import confusion_matrix
 import os
 from scipy import stats
 import time
+import itertools
 
 from ttools import io, swarm, rbf_inversion, utils, config, convert
 
@@ -265,3 +266,35 @@ def random_parameter_search(n_experiments, n_trials, base_dir="E:\\trough_compar
         print(f"THAT TOOK {(tf - t0) / 60} MINUTES")
         processed_results.append(statistics)
         pandas.DataFrame(processed_results).to_csv(os.path.join(base_dir, "results.csv"))
+
+
+def grid_parameter_search(default_params, parameter_values, n_trials, base_dir="E:\\trough_comparison",
+                          start_date=np.datetime64("2014-01-01"), end_date=np.datetime64("2020-01-01")):
+    processed_results = []
+    grid_values = list(itertools.product(*parameter_values.values()))
+    grid_keys = [list(parameter_values.keys())] * len(grid_values)
+    i = 0
+    for grid_key, grid_value in zip(grid_keys, grid_values):
+        # setup directory
+        experiment_dir = os.path.join(base_dir, f"experiment_{i}")
+        os.makedirs(experiment_dir, exist_ok=True)
+
+        # get and save hyperparameter list
+        params = default_params.copy()
+        update = {key: value for key, value in zip(grid_key, grid_value)}
+        params.update(update)
+        print(params)
+        io.write_yaml(os.path.join(experiment_dir, 'params.yaml'), **params)
+
+        t0 = time.time()
+        results = run_n_random_days(n_trials, **params, start_date=start_date, end_date=end_date)
+        statistics = process_results(results, bad_mlon_range=[130, 260])
+        for k, v in statistics.items():
+            print(k, v)
+        results.to_csv(os.path.join(experiment_dir, "results.csv"))
+        tf = time.time()
+        print(f"THAT TOOK {(tf - t0) / 60} MINUTES")
+        processed_results.append(statistics)
+        pandas.DataFrame(processed_results).to_csv(os.path.join(base_dir, "results.csv"))
+
+        i += 1

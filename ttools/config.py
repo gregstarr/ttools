@@ -5,12 +5,12 @@ import cvxpy as cp
 
 
 base_dir = madrigal_dir = madrigal_lat = madrigal_lon = tec_dir = arb_dir = swarm_dir = swarm_coords_dir = kp_file \
-    = grid_file = mlt_vals = mlat_vals = mlt_grid = mlat_grid = PARALLEL = artifact_file = SOLVER = None
+    = grid_file = mlt_vals = mlat_vals = mlt_grid = mlat_grid = PARALLEL = artifact_file = SOLVER = omni_file = None
 
 
 def update(_base_dir="E:\\"):
     global base_dir, madrigal_dir, madrigal_lat, madrigal_lon, tec_dir, arb_dir, swarm_dir, swarm_coords_dir
-    global kp_file, grid_file, mlt_vals, mlat_vals, mlt_grid, mlat_grid, PARALLEL, artifact_file, SOLVER
+    global kp_file, grid_file, mlt_vals, mlat_vals, mlt_grid, mlat_grid, PARALLEL, artifact_file, SOLVER, omni_file
     base_dir = _base_dir
 
     # madrigal TEC data directory
@@ -40,6 +40,7 @@ def update(_base_dir="E:\\"):
         mlt_vals = mlat_vals = mlt_grid = mlat_grid = None
 
     kp_file = os.path.join(base_dir, "2000_2020_kp_ap.txt")
+    omni_file = os.path.join(base_dir, "omni2_all_years.dat")
 
     # other settings
     PARALLEL = True

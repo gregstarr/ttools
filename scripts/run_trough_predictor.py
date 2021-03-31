@@ -59,7 +59,7 @@ if __name__ == "__main__":
     times = []
 
     for date in dates:
-        trough, ssmlon, time = run_date(date, **params)
+        trough, time, ssmlon = run_date(date, **params)
         troughs.append(trough)
         ssmlons.append(ssmlon)
         times.append(time)

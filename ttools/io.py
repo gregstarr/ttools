@@ -7,6 +7,7 @@ import h5py
 import pysatCDF
 import itertools
 import yaml
+from scipy import interpolate
 
 from ttools import utils, config
 
@@ -37,7 +38,9 @@ SWARM_NEW_COORDS = (
 )
 
 
-def get_gm_index_kyoto(fn="E:\\2000_2020_kp_ap.txt"):
+def get_gm_index_kyoto(fn=None):
+    if fn is None:
+        fn = config.kp_file
     with open(fn, 'r') as f:
         text = f.readlines()
     ut_list = []
@@ -78,7 +81,17 @@ def get_gm_index_kyoto(fn="E:\\2000_2020_kp_ap.txt"):
     return pandas.DataFrame({'kp': kp, 'ap': ap, 'ut': ut}, index=pandas.to_datetime(ut, unit='s'))
 
 
-def get_omni_data(fn="E:\\omni2_all_years.dat"):
+def get_kp(times, fn=None):
+    if fn is None:
+        fn = config.kp_file
+    data = get_gm_index_kyoto(fn)
+    interpolator = interpolate.interp1d(data['ut'].values, data['kp'], kind='previous')
+    return interpolator(times.astype('datetime64[s]').astype(float))
+
+
+def get_omni_data(fn=None):
+    if fn is None:
+        fn = config.omni_file
     data = np.loadtxt(fn)
     year = (data[:, 0] - 1970).astype('datetime64[Y]')
     doy = (data[:, 1] - 1).astype('timedelta64[D]')
