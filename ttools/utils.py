@@ -2,6 +2,7 @@ import numpy as np
 import datetime
 import os
 from skimage.measure import profile_line
+from skimage.util import view_as_windows
 
 
 def datetime64_to_timestamp(dt64):
@@ -116,6 +117,33 @@ def moving_func_trim(window_diameter, *arrays):
     return (array[window_radius:-window_radius] for array in arrays)
 
 
+def extract_patches(arr, patch_shape, step=1):
+    """Assuming `arr` is 3D (time, lat, lon). `arr` will be padded, then have patches extracted using
+    `skimage.util.view_as_windows`. The padding will be "edge" for lat, and "wrap" for lon, with no padding for
+    time. Returned array will have same lat and lon dimension length as input and a different time dimension length
+    depending on `patch_shape`.
+
+    Parameters
+    ----------
+    arr: numpy.ndarray
+        must be 3 dimensional
+    patch_shape: tuple
+        must be length 3
+    step: int
+    Returns
+    -------
+    patches view of padded array
+        shape (arr.shape[0] - patch_shape[0] + 1, arr.shape[1], arr.shape[2]) + patch_shape
+    """
+    assert arr.ndim == 3 and len(patch_shape) == 3, "Invalid input args"
+    # lat padding
+    padded = np.pad(arr, ((0, 0), (patch_shape[1] // 2, patch_shape[1] // 2), (0, 0)), 'edge')
+    # lon padding
+    padded = np.pad(padded, ((0, 0), (0, 0), (patch_shape[2] // 2, patch_shape[2] // 2)), 'wrap')
+    patches = view_as_windows(padded, patch_shape, step)
+    return patches
+
+
 def get_grid_coords(x, y, x_grid, y_grid):
     """Gets grid indices of points.
 
@@ -207,3 +235,13 @@ def polar_to_cart(lat, lon, period=24):
     r = 90 - lat
     t = lon * 2 * np.pi / period
     return r * np.cos(t), r * np.sin(t)
+
+
+def concatenate(*lists, axis=0):
+    return (np.concatenate(list_, axis=axis) for list_ in lists)
+
+
+def get_random_dates(n, start_date=np.datetime64("2014-01-01"), end_date=np.datetime64("2020-01-01")):
+    time_range_days = (end_date - start_date).astype('timedelta64[D]').astype(int)
+    offsets = np.sort(np.random.choice(np.arange(time_range_days), n, False))
+    return start_date + offsets.astype('timedelta64[D]')

@@ -4,12 +4,11 @@ import pandas
 import os
 import glob
 import h5py
-import pysatCDF
-import itertools
 import yaml
 from scipy import interpolate
 
 from ttools import utils, config
+from ttools.swarm import SWARM_SATELLITES
 
 
 OMNI_COLUMNS = (
@@ -20,21 +19,6 @@ OMNI_COLUMNS = (
     "na_np_ratio_std", "e_field", "plasma_beta", "alfven_mach_number", "kp", "r", "dst", "ae", "proton_flux_1",
     "proton_flux_2", "proton_flux_4", "proton_flux_10", "proton_flux_30", "proton_flux_60", "proton_flux_flag", "ap",
     "f107", "pcn", "al", "au", "magnetosonic_mach_number"
-)
-
-ALL_SWARM_FIELDS = (
-    'Latitude', 'Longitude', 'Height', 'Radius', 'SZA', 'SAz', 'ST', 'Diplat', 'Diplon', 'MLat', 'MLT', 'AACGMLat',
-    'AACGMLon', 'n', 'Te_hgn', 'Te_lgn', 'T_elec', 'Vs_hgn', 'Vs_lgn', 'U_SC', 'Flagbits'
-)
-
-
-SWARM_FIELDS_LESS_MAG_COORDS = (
-    'Height', 'Radius', 'SZA', 'SAz', 'ST', 'n', 'Te_hgn', 'Te_lgn', 'T_elec', 'Vs_hgn', 'Vs_lgn', 'U_SC', 'Flagbits'
-)
-
-
-SWARM_NEW_COORDS = (
-    'apex_lat', 'apex_lon', 'qd_lat', 'qd_lon', 'mlt', 'lat', 'lon'
 )
 
 
@@ -188,77 +172,47 @@ def open_madrigal_file(fn):
     return tec, timestamps, lat, lon
 
 
-def get_swarm_data(start_date, end_date, sat, data_dir=None, coords_dir=None):
-    """Gets madrigal TEC and timestamps assuming regular sampling. Fills in missing time steps with NaNs.
+def get_swarm_data(start_date, end_date, data_dir=None):
+    """Gets swarm and timestamps
 
     Parameters
     ----------
-    start_date, end_date: numpy.datetime64
-    sat, data_dir, coords_dir: str
+    start_date, end_date: np.datetime64
+    data_dir: str
 
     Returns
     -------
-    data: dict
-    ref_times: numpy.ndarray[datetime64]
+    tec, times: numpy.ndarray
     """
     if data_dir is None:
         data_dir = config.swarm_dir
-    if coords_dir is None:
-        coords_dir = config.swarm_coords_dir
-    fields = SWARM_FIELDS_LESS_MAG_COORDS + SWARM_NEW_COORDS
-
     dt = np.timedelta64(500, 'ms')
     dt_sec = dt.astype('timedelta64[ms]').astype(float)
     start_date = (np.ceil(start_date.astype('datetime64[ms]').astype(float) / dt_sec) * dt_sec).astype('datetime64[ms]')
     end_date = (np.ceil(end_date.astype('datetime64[ms]').astype(float) / dt_sec) * dt_sec).astype('datetime64[ms]')
     ref_times = np.arange(start_date, end_date, dt)
     ref_times_ut = ref_times.astype('datetime64[ms]').astype(float)
-    data = {f: np.ones(ref_times.shape[0]) * np.nan for f in fields}
-    file_dates = np.unique(ref_times.astype('datetime64[D]'))
+    keys = ['n', 'mlat', 'mlon', 'mlt']
+    data = {sat: {key: [] for key in keys} for sat in SWARM_SATELLITES}
+    file_dates = np.unique(ref_times.astype('datetime64[M]'))
     file_dates = utils.decompose_datetime64(file_dates)
     for i in range(file_dates.shape[0]):
         y = file_dates[i, 0]
         m = file_dates[i, 1]
-        d = file_dates[i, 2]
-        files = glob.glob(os.path.join(data_dir, f"SW_EXTD_EFI{sat.upper()}_LP_HM_{y:04d}{m:02d}{d:02d}*.cdf"))
-        files = filter_swarm_files(files)
-        for fn in files:
-            file_data = open_swarm_file(fn)
-            coords_fn = os.path.join(coords_dir, f"{utils.no_ext_fn(fn)}_coords.h5")
-            file_data.update(open_swarm_coords_file(coords_fn))
-            file_times_ut = (np.floor(file_data['Timestamp'].astype('datetime64[ms]').astype(float) / dt_sec) * dt_sec)
-            # assume ut is increasing and has no repeating entries, basically that it is a subset of ref_times_ut
-            r_mask = np.in1d(ref_times_ut, file_times_ut)
-            c_mask = np.in1d(file_times_ut, ref_times_ut)
-            for f in fields:
-                if f in file_data:
-                    data[f][r_mask] = file_data[f][c_mask]
+        fn = os.path.join(data_dir, "{year:04d}_{month:02d}_swarm.h5".format(year=y, month=m))
+        d, ut = open_swarm_file(fn)
+        in_time_mask = np.in1d(ut, ref_times_ut)
+        for sat in SWARM_SATELLITES:
+            for key in keys:
+                data[sat][key].append(d[sat][key][in_time_mask])
+    for sat in SWARM_SATELLITES:
+        for key in keys:
+            data[sat][key] = np.concatenate(data[sat][key], axis=0)
     return data, ref_times
 
 
-def filter_swarm_files(files):
-    """given a list of SWARM filenames, returns a list only including the latest version of each file
-
-    Parameters
-    ----------
-    files: list[str]
-
-    Returns
-    -------
-    list[str]
-    """
-    result = []
-    base = [(os.path.split(fn)[0], utils.no_ext_fn(fn)) for fn in files]
-    splitup = [(b[:-4], b[-4:], a) for a, b in base]
-    splitup = sorted(splitup, key=lambda x: x[0])
-    for key, grp in itertools.groupby(splitup, lambda x: x[0]):
-        latest_version = sorted(grp, key=lambda x: x[1])[-1]
-        result.append(os.path.join(latest_version[2], f"{latest_version[0]}{latest_version[1]}.cdf"))
-    return result
-
-
 def open_swarm_file(fn):
-    """Opens a SWARM file
+    """Open a monthly SWARM file, return its data
 
     Parameters
     ----------
@@ -266,61 +220,23 @@ def open_swarm_file(fn):
 
     Returns
     -------
-    dict
-        Timestamp
-        Latitude
-        Longitude
-        Height: m Height above WGS84 reference ellipsoid.
-        Radius: m Distance from the Earth’s centre.
-        SZA: deg Solar Zenith Angle.
-        SAz: deg Solar azimuth in Earth frame, north is 0 deg.
-        ST: hour Apparent solar time
-        Diplat: deg Quasi-dipole latitude
-        Diplon
-        MLT: hour Magnetic local time based on quasi-dipole
-        AACGMLat: deg Altitude-adjusted corrected geomagnetic latitude
-        AACGMLon
-        n: cm-3 Plasma density from ion current
-        Te_hgn: K Electron temperature, estimated by the high gain probe
-        Te_lgn: K Electron temperature, estimated by the low gain probe
-        Te: K Electron temperature, blended value
-        Vs_hgn: V Spacecraft potential, estimated by the high gain probe
-        Vs_lgn: V Spacecraft potential, estimated by the low gain probe
-        Vs: V Spacecraft potential, blended value
-        Flagbits
+    n, times, mlat, mlt, mlon: numpy.ndarray
     """
-    with pysatCDF.CDF(fn) as f:
-        data = f.data
-    print(f"Opened swarm file: {fn}, size: {data['Timestamp'].shape}")
-    return data
-
-
-def open_swarm_coords_file(fn):
-    """Opens precomputed swarm coordinates h5 file (one per swarm cdf file)
-
-    Parameters
-    ----------
-    fn: str
-
-    Returns
-    -------
-    dict of numpy.ndarray[float]
-        keys: 'apex_lat', 'apex_lon', 'qd_lat', 'qd_lon', 'mlt'
-    """
-    coords = {}
+    data = {}
     with h5py.File(fn, 'r') as f:
-        coords['apex_lat'] = f['apex_lat'][()]
-        coords['apex_lon'] = f['apex_lon'][()]
-        coords['qd_lat'] = f['qd_lat'][()]
-        coords['qd_lon'] = f['qd_lon'][()]
-        coords['mlt'] = f['mlt'][()]
-        coords['lat'] = f['lat'][()]
-        coords['lon'] = f['lon'][()]
-    print(f"Opened swarm coords file: {fn}, size: {coords['apex_lat'].shape}")
-    return coords
+        ut = f['ut_ms'][()]
+        for sat in SWARM_SATELLITES:
+            data[sat] = {
+                'n': f[f'/swarm{sat}/n'][()],
+                'mlat': f[f'/swarm{sat}/apex_lat'][()],
+                'mlon': f[f'/swarm{sat}/apex_lon'][()],
+                'mlt': f[f'/swarm{sat}/mlt'][()],
+            }
+    print(f"Opened SWARM file: {fn}, size: {ut.shape}")
+    return data, ut
 
 
-def get_tec_data(start_date, end_date, data_dir=None):
+def get_tec_data(start_date, end_date, dt=np.timedelta64(1, 'h'), data_dir=None):
     """Gets TEC and timestamps
 
     Parameters
@@ -334,7 +250,6 @@ def get_tec_data(start_date, end_date, data_dir=None):
     """
     if data_dir is None:
         data_dir = config.tec_dir
-    dt = np.timedelta64(1, 'h')
     dt_sec = dt.astype('timedelta64[s]').astype(int)
     start_date = (np.ceil(start_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
     end_date = (np.ceil(end_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
@@ -378,7 +293,7 @@ def open_tec_file(fn):
     return tec, times, ssmlon, n, std
 
 
-def get_arb_data(start_date, end_date, data_dir=None):
+def get_arb_data(start_date, end_date, dt=np.timedelta64(1, 'h'), data_dir=None):
     """Gets auroral boundary mlat and timestamps
 
     Parameters
@@ -392,7 +307,6 @@ def get_arb_data(start_date, end_date, data_dir=None):
     """
     if data_dir is None:
         data_dir = config.arb_dir
-    dt = np.timedelta64(1, 'h')
     dt_sec = dt.astype('timedelta64[s]').astype(int)
     start_date = (np.ceil(start_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
     end_date = (np.ceil(end_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')

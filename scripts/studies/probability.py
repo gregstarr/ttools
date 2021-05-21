@@ -1,9 +1,11 @@
 import numpy as np
 import bottleneck as bn
-from scipy import interpolate
+import pandas
+import os
 import matplotlib.pyplot as plt
+from matplotlib import colors
 
-from ttools import config, io, plotting, convert, utils
+from ttools import config, io, plotting
 
 
 MONTH_INDEX = {
@@ -12,10 +14,45 @@ MONTH_INDEX = {
     'summer': [4, 5, 6, 7],
 }
 
+DITHER = {
+    'mlt': .01,
+    'mlat': .01,
+    'width': .7,
+    'kp': .5,
+    'log_kp': .1,
+    'by': .07,
+    'bz': .07,
+    'dst': 0.5,
+    'density': .15,
+    'log_density': .03,
+    'f107': 3,
+    'log_f107': .03,
+    'pressure': .15,
+    'log_pressure': .02,
+    'log_speed': .02,
+    'log_newell': .1,
+    'log_temp': .01,
+    'speed': 1,
+    'temp': 10,
+}
 
-def plot_mlt_mlat_polar_probability(trough_data, kp):
+BINS = {
+    'width': 40,
+    'mlt': 40,
+    'depth': 50,
+    'mlat': 40,
+}
+
+LOG = ['kp', 'newell', 'density', 'f107', 'pressure', 'speed', 'temp']
+
+WIDTH_BOUNDS = [1, 12]
+DEPTH_BOUNDS = [-1, 0]
+MLT_BOUNDS = [-12, 12]
+MLAT_BOUNDS = [40, 80]
+
+
+def plot_polar_probability_season(trough_data, kp_mask):
     months = (trough_data['time'].astype('datetime64[M]') - trough_data['time'].astype('datetime64[Y]')).astype(int)
-    kp_mask = kp <= 3
 
     prob = {}
     for season, mo in MONTH_INDEX.items():
@@ -39,11 +76,35 @@ def plot_mlt_mlat_polar_probability(trough_data, kp):
     plt.colorbar(pcm, cax=cb_ax)
 
 
-def plot_season_mlt_probability(trough_data, kp):
-    kp_mask = kp <= 3
+def plot_polar_probability_param(trough, param, bins, rows=2):
+    if isinstance(bins, list) or isinstance(bins, np.ndarray):
+        bin_edges = bins
+    else:
+        bin_edges = np.linspace(np.nanmin(param), np.nanmax(param), bins + 1)
 
-    n_season_bins = 50
-    n_mlt_bins = 60
+    prob = {}
+    for i in range(len(bin_edges) - 1):
+        bin = (bin_edges[i], bin_edges[i + 1])
+        mask = (param > bin[0]) & (param <= bin[1])
+        prob[bin] = bn.nanmean(trough[mask], 0)
+    max_prob = np.nanmax([np.nanmax(p) for p in prob.values()])
+
+    row_size = int(np.ceil((len(bin_edges) - 1) / rows))
+
+    fig = plt.figure(figsize=(16, 6), tight_layout=True)
+    gs = plt.GridSpec(rows, row_size + 1, width_ratios=[20] * row_size + [1])
+
+    for i, (bin, p) in enumerate(prob.items()):
+        ax = fig.add_subplot(gs[i // row_size, i % row_size], polar=True)
+        pcm = plotting.polar_pcolormesh(ax, config.mlat_grid, config.mlt_grid, p, cmap='jet', vmin=0, vmax=max_prob)
+        ax.set_title(f'({bin[0]:.2f}, {bin[1]:.2f}]', loc='left')
+        plotting.format_polar_mag_ax(ax, tick_color='grey')
+
+    cb_ax = fig.add_subplot(gs[:, -1])
+    plt.colorbar(pcm, cax=cb_ax)
+
+
+def plot_season_mlt_probability(trough_data, kp_mask, n_season_bins=50, n_mlt_bins=60):
     n_mlt = trough_data['trough'].shape[-1]
 
     seconds = (trough_data['time'].astype('datetime64[s]') - trough_data['time'].astype('datetime64[Y]')).astype('timedelta64[s]').astype(float)
@@ -63,89 +124,219 @@ def plot_season_mlt_probability(trough_data, kp):
     ax.set_ylabel("MLT")
 
 
-def plot_kp_mlat_probability(trough_data, kp):
-    kp_bins = np.linspace(0, 8, 17)
-    kp_vals = np.column_stack((kp_bins[:-1], kp_bins[1:])).mean(axis=1)
-    mlt_centers = np.array([-3, 0, 3])
-    kp_grid, mlat_grid = np.meshgrid(kp_vals, config.mlat_vals)
-    prob = np.empty((mlt_centers.shape[0], kp_grid.shape[0], kp_grid.shape[1]))
+def plot_param_mlt(trough, param, param_bins=50, param_bounds=None, name='param', norm=None, save_dir=None, time_mask=None, file_extra=None, title_extra=None):
+    if time_mask is None:
+        time_mask = np.ones(trough.shape[0], dtype=bool)
 
-    for m, mlt_center in enumerate(mlt_centers):
-        mlt_mask = abs(config.mlt_vals - mlt_center) <= 1.5
-        for i in range(kp_vals.shape[0]):
-            mask = (kp >= kp_bins[i]) & (kp < kp_bins[i + 1])
-            prob[m, :, i] = np.mean(np.any(trough_data['trough'][mask][:, :, mlt_mask], axis=2), axis=0)
+    mask = np.any(trough[time_mask], axis=1)
+    x = np.broadcast_to(config.mlt_vals[None, :], mask.shape)
+    x = x + np.random.randn(*x.shape) * DITHER['mlt']
 
-    fig, ax = plt.subplots(1, 3, sharex=True, sharey=True)
-    for m, mlt_center in enumerate(mlt_centers):
-        pcm = ax[m].pcolormesh(kp_grid, mlat_grid, prob[m], cmap='jet', vmin=0, vmax=prob.max())
-        ax[m].set_title(mlt_center)
-    ax[0].set_ylabel("MLAT")
-    ax[1].set_xlabel("Kp")
+    y_sl = (time_mask, ) + (None, ) * (2 - param.ndim)
+    y = np.broadcast_to(param[y_sl], mask.shape)
 
-    fig, cax = plt.subplots()
-    plt.colorbar(pcm, cax=cax)
+    if param_bounds is None:
+        param_bounds = np.quantile(param[np.isfinite(param)], [.01, .99])
 
+    mask &= np.isfinite(y)
 
-def plot_kp_mlt_probability(trough_data, kp):
-    kp_bins = np.linspace(0, 8, 17)
-    kp_vals = np.column_stack((kp_bins[:-1], kp_bins[1:])).mean(axis=1)
-    n_mlt_bins = 30
-    mlt_vals = np.linspace(-12, 12, n_mlt_bins)
-    n_mlt = trough_data['trough'].shape[-1]
-    kp_grid, mlt_grid = np.meshgrid(kp_vals, mlt_vals)
-    prob = np.empty((kp_grid.shape[0], kp_grid.shape[1]))
-
-    for i in range(kp_vals.shape[0]):
-        mask = (kp >= kp_bins[i]) & (kp < kp_bins[i + 1])
-        prob[:, i] = np.mean(np.any(trough_data['trough'][mask][:, :, np.arange(n_mlt).reshape((-1, n_mlt // n_mlt_bins))], axis=(1, 3)), axis=0)
-
-    fig, ax = plt.subplots()
-    pcm = ax.pcolormesh(kp_grid, mlt_grid, prob, cmap='jet')
+    fig, ax = plt.subplots(figsize=(8, 6), tight_layout=True)
+    (counts, *_, pcm) = ax.hist2d(x[mask], y[mask], bins=[BINS['mlt'], param_bins], range=[MLT_BOUNDS, param_bounds], cmap='jet', norm=norm)
     plt.colorbar(pcm)
-    ax.set_ylabel("MLT")
-    ax.set_xlabel("Kp")
+    title = f"N = {counts.sum()}{' ' + title_extra if title_extra is not None else ''}"
+    ax.set_title(title)
+    ax.set_xlabel('MLT')
+    ax.set_ylabel(name)
+
+    if save_dir is not None:
+        fn = f"{name}_mlt_dist{'_' + file_extra if file_extra is not None else ''}{'_norm' if norm is not None else ''}.png"
+        fig.savefig(os.path.join(save_dir, fn))
 
 
-def plot_param_mlat_probability(trough_data, param, nbins, pmin=None, pmax=None, name='param', mlt_centers=np.array([-3, 0, 3])):
-    if pmin is None:
-        pmin = param.min()
-    if pmax is None:
-        pmax = param.max()
-    param_bins = np.linspace(pmin, pmax, nbins + 1)
-    param_vals = np.column_stack((param_bins[:-1], param_bins[1:])).mean(axis=1)
-    param_grid, mlat_grid = np.meshgrid(param_vals, config.mlat_vals)
-    prob = np.empty((mlt_centers.shape[0], param_grid.shape[0], param_grid.shape[1]))
+def plot_param_mlat(trough, param, param_bins=50, param_bounds=None, name='param', norm=None, mlt_center=0, mlt_width=1.5, save_dir=None):
+    shp = (trough.shape[0], trough.shape[1])
+    x = np.broadcast_to(param[:, None], shp)
+    y = np.broadcast_to(config.mlat_vals[None, :], shp)
+    y = y + np.random.randn(*y.shape) * DITHER['mlat']
 
-    for m, mlt_center in enumerate(mlt_centers):
-        mlt_mask = abs(config.mlt_vals - mlt_center) <= 1.5
-        for i in range(param_vals.shape[0]):
-            mask = (param >= param_bins[i]) & (param < param_bins[i + 1])
-            prob[m, :, i] = np.mean(np.any(trough_data['trough'][mask][:, :, mlt_mask], axis=2), axis=0)
+    if param_bounds is None:
+        param_bounds = np.quantile(param[np.isfinite(param)], [.01, .99])
 
-    fig, ax = plt.subplots(1, 3, sharex=True, sharey=True, tight_layout=True)
-    for m, mlt_center in enumerate(mlt_centers):
-        pcm = ax[m].pcolormesh(param_grid, mlat_grid, prob[m], cmap='jet', vmin=0, vmax=np.nanmax(prob))
-        ax[m].set_title(mlt_center)
-    ax[0].set_ylabel("MLAT")
-    ax[1].set_xlabel(name)
+    mlt_mask = abs(config.mlt_vals - mlt_center) <= mlt_width
+    trough_mask = np.any(trough[:, :, mlt_mask], axis=-1)
+
+    fig, ax = plt.subplots(figsize=(8, 6), tight_layout=True)
+    (counts, *_, pcm) = ax.hist2d(x[trough_mask], y[trough_mask], bins=[param_bins, BINS['mlat']], range=[param_bounds, MLAT_BOUNDS], cmap='jet', norm=norm)
     plt.colorbar(pcm)
+    ax.set_title(f"N = {counts.sum()} || MLT = {mlt_center}")
+    ax.set_xlabel(name)
+    ax.set_ylabel('MLAT')
+    if save_dir is not None:
+        fn = f"{name}_mlat_dist{mlt_center % 24:d}{'_norm' if norm is not None else ''}.png"
+        fig.savefig(os.path.join(save_dir, fn))
+
+
+def plot_width_depth(width, depth, time_mask, mlt_mask, file_extra=None, title_extra=None, save_dir=None, norm=None):
+    x = width[time_mask][:, mlt_mask]
+    y = depth[time_mask][:, mlt_mask]
+
+    mask = np.isfinite(x) & np.isfinite(y)
+    fig, ax = plt.subplots(figsize=(8, 6), tight_layout=True)
+    (counts, *_, pcm) = ax.hist2d(x[mask], y[mask], bins=[BINS['width'], BINS['depth']], range=[WIDTH_BOUNDS, DEPTH_BOUNDS], cmap='jet', norm=norm)
+    plt.colorbar(pcm)
+    title = f"N = {counts.sum()}{' ' + title_extra if title_extra is not None else ''}"
+    ax.set_title(title)
+    ax.set_xlabel('width')
+    ax.set_ylabel('depth')
+    if save_dir is not None:
+        fn = f"width_depth_dist{'_' + file_extra if file_extra is not None else ''}{'_norm' if norm is not None else ''}.png"
+        fig.savefig(os.path.join(save_dir, fn))
+
+
+def plot_param_hist(param, bins=50, bounds=None, name='param', save_dir=None, time_mask=None):
+    if time_mask is None:
+        time_mask = np.ones(param.shape[0], dtype=bool)
+
+    if bounds is None:
+        bounds = np.quantile(param[np.isfinite(param)], [.01, .99])
+
+    fig, ax = plt.subplots(figsize=(8, 6), tight_layout=True)
+    counts, *_ = ax.hist(param[time_mask], bins=bins, range=bounds)
+    ax.grid()
+    ax.set_title(f"N = {counts.sum()}")
+    ax.set_xlabel(name)
+    ax.set_ylabel('count')
+    if save_dir is not None:
+        fn = f"{name}_dist.png"
+        fig.savefig(os.path.join(save_dir, fn))
+
+
+def plot_param_mlt_set(param, set_param, save_dir, name='param', set_name='set_param', bins=50, param_bounds=None, quantiles=(0, .2, .4, .6, .8, 1)):
+    edges = np.quantile(set_param[np.isfinite(set_param)], quantiles)
+    bounds = [(edges[i], edges[i + 1]) for i in range(len(edges) - 1)]
+    for i, bound in enumerate(bounds):
+        time_mask = (set_param >= bound[0]) & (set_param <= bound[1])
+        title_extra = f"|| {set_name} = ({bound[0]:.2f}, {bound[1]:.2f})"
+        plot_param_mlt(trough, param, bins, param_bounds, name, time_mask=time_mask, title_extra=title_extra,
+                       file_extra=f"{set_name}_{i}", save_dir=save_dir)
+
+
+def plot_width_depth_set(width, depth, set_param, set_name='set_param', quantiles=(0, .33, .66, 1)):
+    edges = np.quantile(set_param[np.isfinite(set_param)], quantiles)
+    bounds = [(edges[i], edges[i + 1]) for i in range(len(edges) - 1)]
+    mltb = [(-6, -3), (-3, 0), (0, 3), (3, 6)]
+    for i, bound in enumerate(bounds):
+        time_mask = (set_param >= bound[0]) & (set_param <= bound[1])
+        for j, mlt_bounds in enumerate(mltb):
+            mlt_mask = (config.mlt_vals >= mlt_bounds[0]) & (config.mlt_vals <= mlt_bounds[1])
+            title_extra = f"|| {set_name} = ({bound[0]:.2f}, {bound[1]:.2f}) || MLT = ({mlt_bounds[0]:.2f}, {mlt_bounds[1]:.2f})"
+            file_extra = f"{set_name}_{j}_{i}"
+            plot_width_depth(width, depth, time_mask, mlt_mask, file_extra, title_extra, "E:\\study plots\\width_depth")
 
 
 if __name__ == "__main__":
-    trough_data_fn = "E:\\labels.npz"
-    trough_data = np.load(trough_data_fn)
-    kp = io.get_kp(trough_data['time'])
+    ####################################################################################################################
+    # PREPARE DATA #####################################################################################################
+    ####################################################################################################################
+    # Load trough dataset
+    trough_data = np.load("E:\\dataset.npz")
+    trough = trough_data['trough']
+    x = trough_data['x']
+    xi = x.copy()
+    xi[~trough] = np.inf
+    # Calculate trough depth / width
+    width = np.sum(trough, axis=1).astype(float)
+    width[width == 0] = np.nan
+    depth = np.nanmin(x, axis=1)
+    depth[depth == np.inf] = np.nan
+    # Load Omni
     omni = io.get_omni_data()
+    # Assemble
+    params = {
+        'width': width,
+        'depth': depth,
+        'kp': io.get_kp(trough_data['time']),
+        'newell': pandas.read_hdf("E:\\newell.h5").values,
+        'bz': omni['bz_gsm'][trough_data['time']].values,
+        'by': omni['by_gsm'][trough_data['time']].values,
+        'speed': omni['plasma_speed'][trough_data['time']].values,
+        'pressure': omni['flow_pressure'][trough_data['time']].values,
+        'f107': omni['f107'][trough_data['time']].values,
+        'dst': omni['dst'][trough_data['time']].values,
+        'density': omni['proton_density'][trough_data['time']].values,
+        'temp': omni['proton_temp'][trough_data['time']].values,
+    }
+    # log
+    for p, v in params.copy().items():
+        if p in LOG:
+            params[f"log_{p}"] = np.log10(v + 1)
+    # Dither
+    for p, v in params.items():
+        if p in DITHER:
+            params[p] = v + np.random.randn(*v.shape) * DITHER[p]
 
-    speed = omni['plasma_speed'][trough_data['time']].interpolate()
-    bmag = omni['b_mag'][trough_data['time']].interpolate()
+    # Plot Enable Switches
+    PARAM_DIST = True
+    WIDTH_DEPTH = True
+    WIDTH_PARAM = True
+    DEPTH_PARAM = True
+    PARAM_MLT = True
+    PARAM_MLAT = True
+    ####################################################################################################################
+    # PARAM DIST #######################################################################################################
+    ####################################################################################################################
+    print("Parameter Distributions")
+    if PARAM_DIST:
+        for param_name, param_vals in params.items():
+            if param_vals.ndim == 1:
+                plot_param_hist(param_vals, 100, name=param_name, save_dir="E:\\study plots\\param")
 
-    # plot_mlt_mlat_polar_probability(trough_data, kp)
-    # plot_season_mlt_probability(trough_data, kp)
-    # plot_kp_mlt_probability(trough_data, kp)
-    # plot_param_mlat_probability(trough_data, kp, 16, 'Kp')
-    plot_param_mlat_probability(trough_data, speed, 20, pmax=800, name='Speed')
-    plot_param_mlat_probability(trough_data, bmag, 10, pmax=30, name='BMag')
+    ####################################################################################################################
+    # WIDTH - DEPTH ####################################################################################################
+    ####################################################################################################################
+    print("Width - Depth Distributions")
+    if WIDTH_DEPTH:
+        for param_name, param_vals in params.items():
+            if param_vals.ndim == 1:
+                plot_width_depth_set(params['width'], params['depth'], param_vals, param_name)
 
-    plt.show()
+    ####################################################################################################################
+    # WIDTH - PARAM ####################################################################################################
+    ####################################################################################################################
+    print("Width - Parameter Distributions")
+    if WIDTH_PARAM:
+        for param_name, param_vals in params.items():
+            if param_vals.ndim == 1:
+                plot_param_mlt_set(params['width'], param_vals, "E:\\study plots\\mlt_width", 'width', param_name, BINS['width'], WIDTH_BOUNDS)
+
+    ####################################################################################################################
+    # DEPTH - PARAM ####################################################################################################
+    ####################################################################################################################
+    print("Depth - Parameter Distributions")
+    if DEPTH_PARAM:
+        for param_name, param_vals in params.items():
+            if param_vals.ndim == 1:
+                plot_param_mlt_set(params['depth'], param_vals, "E:\\study plots\\mlt_depth", 'depth', param_name, BINS['depth'], DEPTH_BOUNDS)
+
+    ####################################################################################################################
+    # PARAM - MLT ######################################################################################################
+    ####################################################################################################################
+    print("Parameter - MLT Distributions")
+    if PARAM_MLT:
+        for param_name, param_vals in params.items():
+            if param_vals.ndim == 1:
+                plot_param_mlt(trough, param_vals, 100, name=param_name, save_dir="E:\\study plots\\mlt")
+                plot_param_mlt(trough, param_vals, 100, name=param_name, norm=colors.LogNorm(), save_dir="E:\\study plots\\mlt")
+
+    ####################################################################################################################
+    # PARAM - MLAT #####################################################################################################
+    ####################################################################################################################
+    print("Parameter - MLAT Distributions")
+    if PARAM_MLAT:
+        for param_name, param_vals in params.items():
+            if param_vals.ndim == 1:
+                for mlt in [-6, -3, 0, 3, 6]:
+                    plot_param_mlat(trough, param_vals, name=param_name, mlt_center=mlt, save_dir="E:\\study plots\\mlat")
+                    plot_param_mlat(trough, param_vals, name=param_name, mlt_center=mlt, norm=colors.LogNorm(), save_dir="E:\\study plots\\mlat")
+
+    # plt.show()

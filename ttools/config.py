@@ -26,8 +26,7 @@ def update(_base_dir="E:\\"):
     arb_dir = os.path.join(base_dir, "auroral_boundary")
 
     # SWARM data directory
-    swarm_dir = os.path.join(base_dir, "swarm", "extracted")
-    swarm_coords_dir = os.path.join(base_dir, "swarm", "coordinates")
+    swarm_dir = os.path.join(base_dir, "swarm")
 
     grid_file = os.path.join(tec_dir, "grid.h5")
     if os.path.exists(grid_file):

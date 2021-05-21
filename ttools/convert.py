@@ -29,7 +29,7 @@ def mlon_to_mlt_array(mlon, times, converter=None, ssheight=50*6371, return_ssml
     ssmlat, ssmlon = converter.geo2apex(ssglat, ssglon, ssheight)
     mlt = mlon_to_mlt_sub(mlon, ssmlon)
     if return_ssmlon:
-        return mlt, ssmlon
+        return mlt, np.squeeze(ssmlon)
     return mlt
 
 

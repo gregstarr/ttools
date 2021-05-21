@@ -185,4 +185,4 @@ def test_random_parameter_search():
         overall_stats = pandas.read_csv(overall_stats_fn)
         assert overall_stats.shape == (1, 27)
         exp_0_results = pandas.read_csv(exp_0_results_fn)
-        assert exp_0_results.shape == (24 * 6, 13)
+        assert exp_0_results.shape == (24 * 6, 14)
