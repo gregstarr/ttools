@@ -8,7 +8,7 @@ import yaml
 from scipy import interpolate
 
 from ttools import utils, config
-from ttools.swarm import SWARM_SATELLITES
+from ttools.satellite import SATELLITES
 
 
 OMNI_COLUMNS = (
@@ -193,7 +193,7 @@ def get_swarm_data(start_date, end_date, data_dir=None):
     ref_times = np.arange(start_date, end_date, dt)
     ref_times_ut = ref_times.astype('datetime64[ms]').astype(float)
     keys = ['n', 'mlat', 'mlon', 'mlt']
-    data = {sat: {key: [] for key in keys} for sat in SWARM_SATELLITES}
+    data = {sat: {key: [] for key in keys} for sat in SATELLITES['swarm']}
     file_dates = np.unique(ref_times.astype('datetime64[M]'))
     file_dates = utils.decompose_datetime64(file_dates)
     for i in range(file_dates.shape[0]):
@@ -202,10 +202,10 @@ def get_swarm_data(start_date, end_date, data_dir=None):
         fn = os.path.join(data_dir, "{year:04d}_{month:02d}_swarm.h5".format(year=y, month=m))
         d, ut = open_swarm_file(fn)
         in_time_mask = np.in1d(ut, ref_times_ut)
-        for sat in SWARM_SATELLITES:
+        for sat in SATELLITES['swarm']:
             for key in keys:
                 data[sat][key].append(d[sat][key][in_time_mask])
-    for sat in SWARM_SATELLITES:
+    for sat in SATELLITES['swarm']:
         for key in keys:
             data[sat][key] = np.concatenate(data[sat][key], axis=0)
     return data, ref_times
@@ -225,7 +225,7 @@ def open_swarm_file(fn):
     data = {}
     with h5py.File(fn, 'r') as f:
         ut = f['ut_ms'][()]
-        for sat in SWARM_SATELLITES:
+        for sat in SATELLITES['swarm']:
             data[sat] = {
                 'n': f[f'/swarm{sat}/n'][()],
                 'mlat': f[f'/swarm{sat}/apex_lat'][()],
@@ -347,6 +347,68 @@ def open_arb_file(fn):
         times = f['times'][()]
     print(f"Opened ARB file: {fn}, size: {arb_mlat.shape}")
     return arb_mlat, times
+
+
+def get_dmsp_data(start_date, end_date, data_dir=None):
+    """Gets dmsp flow data and timestamps
+
+    Parameters
+    ----------
+    start_date, end_date: np.datetime64
+    data_dir: str
+
+    Returns
+    -------
+    dmsp data, times: numpy.ndarray
+    """
+    if data_dir is None:
+        data_dir = config.dmsp_dir
+    dt = np.timedelta64(1, 's')
+    dt_sec = dt.astype('timedelta64[s]').astype(int)
+    start_date = (np.ceil(start_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
+    end_date = (np.ceil(end_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
+    ref_times = np.arange(start_date, end_date, dt)
+    ref_times_ut = ref_times.astype('datetime64[s]').astype(int)
+    file_dates = np.unique(ref_times.astype('datetime64[M]'))
+    file_dates = utils.decompose_datetime64(file_dates)
+    sats = ['dmsp15', 'dmsp16', 'dmsp17', 'dmsp18']
+    keys = ['mlat', 'mlt', 'ne', 'hor_ion_v', 'vert_ion_v']
+    data = {sat: {key: np.ones(ref_times.shape[0]) * np.nan for key in keys} for sat in sats}
+    for i in range(file_dates.shape[0]):
+        y = file_dates[i, 0]
+        m = file_dates[i, 1]
+        fn = os.path.join(data_dir, f"{y:04d}_{m:02d}_dmsp_flow.h5")
+        d, ut = open_dmsp_file(fn)
+        ref_mask = np.in1d(ref_times_ut, ut)
+        d_mask = np.in1d(ut, ref_times_ut)
+        for sat in sats:
+            for key in keys:
+                data[sat][key][ref_mask] = d[sat][key][d_mask]
+    return data, ref_times
+
+
+def open_dmsp_file(fn):
+    """Open a monthly dmsp ion flow file, return its data
+
+    Parameters
+    ----------
+    fn: str
+
+    Returns
+    -------
+    data, times: numpy.ndarray
+    """
+    sats = ['dmsp15', 'dmsp16', 'dmsp17', 'dmsp18']
+    keys = ['mlat', 'mlt', 'ne', 'hor_ion_v', 'vert_ion_v']
+    data = {}
+    with h5py.File(fn, 'r') as f:
+        ut = f['ut'][()]
+        for sat in sats:
+            data[sat] = {}
+            for key in keys:
+                data[sat][key] = f[f'/{sat}/{key}'][()]
+    print(f"Opened DMSP file: {fn}, size: {ut.shape}")
+    return data, ut
 
 
 def write_h5(fn, **kwargs):

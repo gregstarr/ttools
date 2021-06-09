@@ -17,8 +17,8 @@ MONTH_INDEX = {
 DITHER = {
     'mlt': .01,
     'mlat': .01,
-    'width': .7,
-    'kp': .5,
+    'width': .5,
+    'kp': .2,
     'log_kp': .1,
     'by': .07,
     'bz': .07,
@@ -34,6 +34,7 @@ DITHER = {
     'log_temp': .01,
     'speed': 1,
     'temp': 10,
+    'e_field': .01,
 }
 
 BINS = {
@@ -124,53 +125,77 @@ def plot_season_mlt_probability(trough_data, kp_mask, n_season_bins=50, n_mlt_bi
     ax.set_ylabel("MLT")
 
 
-def plot_param_mlt(trough, param, param_bins=50, param_bounds=None, name='param', norm=None, save_dir=None, time_mask=None, file_extra=None, title_extra=None):
-    if time_mask is None:
-        time_mask = np.ones(trough.shape[0], dtype=bool)
+def plot_param_mlt(trough, param, fin, param_bins=50, param_bounds=None, name='param', save_dir=None):
+    shp = (trough.shape[0], trough.shape[2])
+    x = np.broadcast_to(param[:, None], shp)
 
-    mask = np.any(trough[time_mask], axis=1)
-    x = np.broadcast_to(config.mlt_vals[None, :], mask.shape)
-    x = x + np.random.randn(*x.shape) * DITHER['mlt']
-
-    y_sl = (time_mask, ) + (None, ) * (2 - param.ndim)
-    y = np.broadcast_to(param[y_sl], mask.shape)
+    y = np.broadcast_to(config.mlt_vals[None, :], shp)
+    y = y + np.random.randn(*y.shape) * DITHER['mlt']
 
     if param_bounds is None:
-        param_bounds = np.quantile(param[np.isfinite(param)], [.01, .99])
+        param_bounds = np.quantile(param[np.isfinite(param)], [.005, .995])
 
-    mask &= np.isfinite(y)
+    trough_mask = np.any((trough * fin), axis=1)
 
-    fig, ax = plt.subplots(figsize=(8, 6), tight_layout=True)
-    (counts, *_, pcm) = ax.hist2d(x[mask], y[mask], bins=[BINS['mlt'], param_bins], range=[MLT_BOUNDS, param_bounds], cmap='jet', norm=norm)
-    plt.colorbar(pcm)
-    title = f"N = {counts.sum()}{' ' + title_extra if title_extra is not None else ''}"
-    ax.set_title(title)
-    ax.set_xlabel('MLT')
-    ax.set_ylabel(name)
+    fin_mask = np.any(fin, axis=1)
+    total_counts, *_ = np.histogram2d(x[fin_mask], y[fin_mask], bins=[param_bins, BINS['mlt']], range=[param_bounds, MLT_BOUNDS])
 
+    fig, ax = plt.subplots(2, 2, figsize=(12, 6), tight_layout=True, gridspec_kw={'hspace': .25, 'wspace': .1, 'height_ratios': [30, 1]})
+    counts, xe, ye, pcm = ax[0, 0].hist2d(x[trough_mask], y[trough_mask], bins=[param_bins, BINS['mlt']], range=[param_bounds, MLT_BOUNDS], cmap='jet')
+    plt.colorbar(pcm, cax=ax[1, 0], orientation='horizontal')
+
+    xv = (xe[:-1] + xe[1:]) / 2
+    yv = (ye[:-1] + ye[1:]) / 2
+    xg, yg = np.meshgrid(xv, yv)
+    prob = counts / total_counts
+    prob[total_counts < 100] = np.nan
+    pcm = ax[0, 1].pcolormesh(xg, yg, prob.T, cmap='jet')
+    plt.colorbar(pcm, cax=ax[1, 1], orientation='horizontal')
+
+    fig.suptitle(f"N = {counts.sum()}")
+    ax[0, 0].set_xlabel(name)
+    ax[0, 1].set_xlabel(name)
+    ax[1, 0].set_xlabel('count')
+    ax[1, 1].set_xlabel('probability')
+    ax[0, 0].set_ylabel('MLT')
     if save_dir is not None:
-        fn = f"{name}_mlt_dist{'_' + file_extra if file_extra is not None else ''}{'_norm' if norm is not None else ''}.png"
+        fn = f"{name}_mlt_dist.png"
         fig.savefig(os.path.join(save_dir, fn))
 
 
-def plot_param_mlat(trough, param, param_bins=50, param_bounds=None, name='param', norm=None, mlt_center=0, mlt_width=1.5, save_dir=None):
+def plot_param_mlat(trough, param, fin, param_bins=50, param_bounds=None, name='param', norm=None, mlt_center=0, mlt_width=1.5, save_dir=None):
     shp = (trough.shape[0], trough.shape[1])
     x = np.broadcast_to(param[:, None], shp)
     y = np.broadcast_to(config.mlat_vals[None, :], shp)
     y = y + np.random.randn(*y.shape) * DITHER['mlat']
 
     if param_bounds is None:
-        param_bounds = np.quantile(param[np.isfinite(param)], [.01, .99])
+        param_bounds = np.quantile(param[np.isfinite(param)], [.005, .995])
 
     mlt_mask = abs(config.mlt_vals - mlt_center) <= mlt_width
-    trough_mask = np.any(trough[:, :, mlt_mask], axis=-1)
+    trough_mask = np.any((trough * fin)[:, :, mlt_mask], axis=-1)
 
-    fig, ax = plt.subplots(figsize=(8, 6), tight_layout=True)
-    (counts, *_, pcm) = ax.hist2d(x[trough_mask], y[trough_mask], bins=[param_bins, BINS['mlat']], range=[param_bounds, MLAT_BOUNDS], cmap='jet', norm=norm)
-    plt.colorbar(pcm)
-    ax.set_title(f"N = {counts.sum()} || MLT = {mlt_center}")
-    ax.set_xlabel(name)
-    ax.set_ylabel('MLAT')
+    fin_mask = np.any(fin[:, :, mlt_mask], axis=-1)
+    total_counts, *_ = np.histogram2d(x[fin_mask], y[fin_mask], bins=[param_bins, BINS['mlat']], range=[param_bounds, MLAT_BOUNDS])
+
+    fig, ax = plt.subplots(2, 2, figsize=(12, 6), tight_layout=True, gridspec_kw={'hspace': .25, 'wspace': .1, 'height_ratios': [30, 1]})
+    counts, xe, ye, pcm = ax[0, 0].hist2d(x[trough_mask], y[trough_mask], bins=[param_bins, BINS['mlat']], range=[param_bounds, MLAT_BOUNDS], cmap='jet', norm=norm)
+    plt.colorbar(pcm, cax=ax[1, 0], orientation='horizontal')
+
+    xv = (xe[:-1] + xe[1:]) / 2
+    yv = (ye[:-1] + ye[1:]) / 2
+    xg, yg = np.meshgrid(xv, yv)
+    prob = counts / total_counts
+    prob[total_counts < 100] = np.nan
+    pcm = ax[0, 1].pcolormesh(xg, yg, prob.T, cmap='jet')
+    plt.colorbar(pcm, cax=ax[1, 1], orientation='horizontal')
+
+    fig.suptitle(f"N = {counts.sum()} || MLT = {mlt_center}")
+    ax[0, 0].set_xlabel(name)
+    ax[0, 1].set_xlabel(name)
+    ax[1, 0].set_xlabel('count')
+    ax[1, 1].set_xlabel('probability')
+    ax[0, 0].set_ylabel('MLAT')
     if save_dir is not None:
         fn = f"{name}_mlat_dist{mlt_center % 24:d}{'_norm' if norm is not None else ''}.png"
         fig.savefig(os.path.join(save_dir, fn))
@@ -181,7 +206,7 @@ def plot_width_depth(width, depth, time_mask, mlt_mask, file_extra=None, title_e
     y = depth[time_mask][:, mlt_mask]
 
     mask = np.isfinite(x) & np.isfinite(y)
-    fig, ax = plt.subplots(figsize=(8, 6), tight_layout=True)
+    fig, ax = plt.subplots(figsize=(12, 6), tight_layout=True)
     (counts, *_, pcm) = ax.hist2d(x[mask], y[mask], bins=[BINS['width'], BINS['depth']], range=[WIDTH_BOUNDS, DEPTH_BOUNDS], cmap='jet', norm=norm)
     plt.colorbar(pcm)
     title = f"N = {counts.sum()}{' ' + title_extra if title_extra is not None else ''}"
@@ -231,7 +256,7 @@ def plot_width_depth_set(width, depth, set_param, set_name='set_param', quantile
             mlt_mask = (config.mlt_vals >= mlt_bounds[0]) & (config.mlt_vals <= mlt_bounds[1])
             title_extra = f"|| {set_name} = ({bound[0]:.2f}, {bound[1]:.2f}) || MLT = ({mlt_bounds[0]:.2f}, {mlt_bounds[1]:.2f})"
             file_extra = f"{set_name}_{j}_{i}"
-            plot_width_depth(width, depth, time_mask, mlt_mask, file_extra, title_extra, "E:\\study plots\\width_depth")
+            plot_width_depth(width, depth, time_mask, mlt_mask, file_extra, title_extra, "C:\\Users\\Greg\\Desktop\\study plots\\width_depth")
 
 
 if __name__ == "__main__":
@@ -243,12 +268,11 @@ if __name__ == "__main__":
     trough = trough_data['trough']
     x = trough_data['x']
     xi = x.copy()
-    xi[~trough] = np.inf
+    xi[~trough] = np.nan
     # Calculate trough depth / width
     width = np.sum(trough, axis=1).astype(float)
     width[width == 0] = np.nan
-    depth = np.nanmin(x, axis=1)
-    depth[depth == np.inf] = np.nan
+    depth = np.nanmin(xi, axis=1)
     # Load Omni
     omni = io.get_omni_data()
     # Assemble
@@ -265,6 +289,7 @@ if __name__ == "__main__":
         'dst': omni['dst'][trough_data['time']].values,
         'density': omni['proton_density'][trough_data['time']].values,
         'temp': omni['proton_temp'][trough_data['time']].values,
+        'e_field': omni['e_field'][trough_data['time']].values,
     }
     # log
     for p, v in params.copy().items():
@@ -277,9 +302,9 @@ if __name__ == "__main__":
 
     # Plot Enable Switches
     PARAM_DIST = True
-    WIDTH_DEPTH = True
-    WIDTH_PARAM = True
-    DEPTH_PARAM = True
+    WIDTH_DEPTH = False
+    WIDTH_PARAM = False
+    DEPTH_PARAM = False
     PARAM_MLT = True
     PARAM_MLAT = True
     ####################################################################################################################
@@ -289,7 +314,9 @@ if __name__ == "__main__":
     if PARAM_DIST:
         for param_name, param_vals in params.items():
             if param_vals.ndim == 1:
-                plot_param_hist(param_vals, 100, name=param_name, save_dir="E:\\study plots\\param")
+                plot_param_hist(param_vals, 25, name=param_name, save_dir="C:\\Users\\Greg\\Desktop\\study plots\\param")
+        plt.close('all')
+
 
     ####################################################################################################################
     # WIDTH - DEPTH ####################################################################################################
@@ -299,6 +326,7 @@ if __name__ == "__main__":
         for param_name, param_vals in params.items():
             if param_vals.ndim == 1:
                 plot_width_depth_set(params['width'], params['depth'], param_vals, param_name)
+        plt.close('all')
 
     ####################################################################################################################
     # WIDTH - PARAM ####################################################################################################
@@ -307,7 +335,8 @@ if __name__ == "__main__":
     if WIDTH_PARAM:
         for param_name, param_vals in params.items():
             if param_vals.ndim == 1:
-                plot_param_mlt_set(params['width'], param_vals, "E:\\study plots\\mlt_width", 'width', param_name, BINS['width'], WIDTH_BOUNDS)
+                plot_param_mlt_set(params['width'], param_vals, "C:\\Users\\Greg\\Desktop\\study plots\\mlt_width", 'width', param_name, BINS['width'], WIDTH_BOUNDS)
+        plt.close('all')
 
     ####################################################################################################################
     # DEPTH - PARAM ####################################################################################################
@@ -316,7 +345,8 @@ if __name__ == "__main__":
     if DEPTH_PARAM:
         for param_name, param_vals in params.items():
             if param_vals.ndim == 1:
-                plot_param_mlt_set(params['depth'], param_vals, "E:\\study plots\\mlt_depth", 'depth', param_name, BINS['depth'], DEPTH_BOUNDS)
+                plot_param_mlt_set(params['depth'], param_vals, "C:\\Users\\Greg\\Desktop\\study plots\\mlt_depth", 'depth', param_name, BINS['depth'], DEPTH_BOUNDS)
+        plt.close('all')
 
     ####################################################################################################################
     # PARAM - MLT ######################################################################################################
@@ -325,8 +355,9 @@ if __name__ == "__main__":
     if PARAM_MLT:
         for param_name, param_vals in params.items():
             if param_vals.ndim == 1:
-                plot_param_mlt(trough, param_vals, 100, name=param_name, save_dir="E:\\study plots\\mlt")
-                plot_param_mlt(trough, param_vals, 100, name=param_name, norm=colors.LogNorm(), save_dir="E:\\study plots\\mlt")
+                plot_param_mlt(trough, param_vals, np.isfinite(x), 25, name=param_name, save_dir="C:\\Users\\Greg\\Desktop\\study plots\\mlt")
+                # plot_param_mlt(trough, param_vals, 100, name=param_name, norm=colors.LogNorm(), save_dir="C:\\Users\\Greg\\Desktop\\study plots\\mlt")
+        plt.close('all')
 
     ####################################################################################################################
     # PARAM - MLAT #####################################################################################################
@@ -336,7 +367,7 @@ if __name__ == "__main__":
         for param_name, param_vals in params.items():
             if param_vals.ndim == 1:
                 for mlt in [-6, -3, 0, 3, 6]:
-                    plot_param_mlat(trough, param_vals, name=param_name, mlt_center=mlt, save_dir="E:\\study plots\\mlat")
-                    plot_param_mlat(trough, param_vals, name=param_name, mlt_center=mlt, norm=colors.LogNorm(), save_dir="E:\\study plots\\mlat")
-
+                    plot_param_mlat(trough, param_vals, np.isfinite(x), param_bins=25, name=param_name, mlt_center=mlt, save_dir="C:\\Users\\Greg\\Desktop\\study plots\\mlat")
+                    # plot_param_mlat(trough, param_vals, name=param_name, mlt_center=mlt, norm=colors.LogNorm(), save_dir="C:\\Users\\Greg\\Desktop\\study plots\\mlat")
+        plt.close('all')
     # plt.show()

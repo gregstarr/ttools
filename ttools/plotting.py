@@ -46,7 +46,7 @@ def polar_pcolormesh(ax, mlat, mlt, value, cs='mlt', **kwargs):
         t = mlt * np.pi / 180
     else:
         raise Exception("Not recognized coordinate system, choose 'mlon' or 'mlt'")
-    return ax.pcolormesh(t - np.pi/360, r + .5, value, shading='auto', **kwargs)
+    return ax.pcolormesh(t - np.pi / 180, r + .5, value, shading='auto', **kwargs)
 
 
 def plot_mlon_lines(ax, ssmlon, mlons=np.arange(0, 360, 45)):

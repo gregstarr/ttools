@@ -3,7 +3,7 @@ import pandas
 import os
 import matplotlib.pyplot as plt
 
-from ttools import tec as ttec, io, utils, plotting, config, swarm, compare
+from ttools import tec as ttec, io, utils, plotting, config, satellite, compare
 
 
 def run_single(date):

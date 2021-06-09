@@ -26,11 +26,13 @@ import numpy as np
 import cvxpy as cp
 import multiprocessing
 from scipy import stats
+import matplotlib.pyplot as plt
+import os
 
 from sklearn.metrics.pairwise import rbf_kernel
 from scipy.sparse import csr_matrix
 
-from ttools import tec as ttec, deminov, config, io, utils
+from ttools import tec as ttec, deminov, config, io, utils, plotting
 from ttools.trough_labeling.labeler import TroughLabelJob
 
 
@@ -140,12 +142,12 @@ PARAM_SAMPLING = {
     'prior_offset': stats.randint(-5, 0),
 }
 
-BG_EST_SHAPE = (1, 19, 11)
+BG_EST_SHAPE = (1, 19, 15)
 MODEL_WEIGHT_MAX = 15
 RBF_BW = 1
 TV_HW = 2
 TV_VW = 1
-L2_WEIGHT = .05
+L2_WEIGHT = .07
 TV_WEIGHT = .15
 PERIMETER_TH = 40
 AREA_TH = 40
@@ -153,13 +155,15 @@ PRIOR_ORDER = 1
 PRIOR = 'auroral_boundary'
 PRIOR_OFFSET = -3
 THRESHOLD = 1
+CLOSING_RAD = 0
 
 
 class RbfInversionLabelJob(TroughLabelJob):
 
     def __init__(self, date, bg_est_shape=BG_EST_SHAPE, model_weight_max=MODEL_WEIGHT_MAX, rbf_bw=RBF_BW, tv_hw=TV_HW,
                  tv_vw=TV_VW, l2_weight=L2_WEIGHT, tv_weight=TV_WEIGHT, prior_order=PRIOR_ORDER, prior=PRIOR,
-                 prior_offset=PRIOR_OFFSET, perimeter_th=PERIMETER_TH, area_th=AREA_TH, threshold=THRESHOLD):
+                 prior_offset=PRIOR_OFFSET, perimeter_th=PERIMETER_TH, area_th=AREA_TH, closing_rad=0,
+                 threshold=THRESHOLD):
         super().__init__(date, bg_est_shape, model_weight_max, rbf_bw, tv_hw, tv_vw, l2_weight, tv_weight, prior_order,
                          prior, prior_offset, perimeter_th, area_th, threshold)
         self.model_weight_max = model_weight_max
@@ -174,6 +178,7 @@ class RbfInversionLabelJob(TroughLabelJob):
         self.perimeter_th = perimeter_th
         self.area_th = area_th
         self.threshold = threshold
+        self.closing_rad = closing_rad
 
     def run(self):
         print("Setting up inversion optimization")
@@ -196,7 +201,7 @@ class RbfInversionLabelJob(TroughLabelJob):
             initial_trough = self.model_output >= self.threshold
             # postprocess
             print("Postprocessing inversion results")
-            self.trough = ttec.postprocess(initial_trough, self.perimeter_th, self.area_th, self.arb)
+            self.trough = ttec.postprocess(initial_trough, self.perimeter_th, self.area_th, self.arb, self.closing_rad)
 
     @staticmethod
     def get_random_params():
@@ -220,3 +225,27 @@ class RbfInversionLabelJob(TroughLabelJob):
         params['bg_est_shape'] = (bge_temporal_size, bge_spatial_size, bge_spatial_size)
         params['threshold'] = None
         return params
+
+    def _plot_single(self, i, swarm_troughs, plot_dir):
+        plots = {
+            'tec': {'data': self.tec[i + self.bg_est_shape[0] // 2], 'kwargs': dict(vmin=0, vmax=16)},
+            'x': {'data': self.x[i], 'kwargs': dict(vmin=-.5, vmax=.5, cmap='coolwarm')},
+            'output': {'data': self.model_output[i], 'kwargs': dict(vmin=-1.5, vmax=1.5, cmap='coolwarm')},
+            'trough': {'data': self.trough[i], 'kwargs': dict(cmap='Blues')},
+        }
+        for name, plot in plots.items():
+            fig, ax = plt.subplots(1, 1, figsize=(10, 10), subplot_kw=dict(projection='polar'), tight_layout=True)
+            pcm = plotting.polar_pcolormesh(ax, config.mlat_grid, config.mlt_grid, plot['data'], **plot['kwargs'])
+            plotting.plot_swarm_troughs_polar(ax, swarm_troughs)
+            plotting.plot_mlon_lines(ax, self.ssmlon[i])
+            plotting.plot_arb(ax, config.mlt_vals, self.arb[i])
+            plotting.format_polar_mag_ax(ax)
+            ax.set_title(f"{self.times[i]} {name}")
+            plt.colorbar(pcm)
+            fig.savefig(os.path.join(plot_dir, f"{self.date.astype('datetime64[D]')}_{i}_{name}.png"))
+            plt.close(fig)
+
+    def plot(self, swarm_troughs, plot_dir):
+        for i in range(self.times.shape[0]):
+            st = swarm_troughs[i == (swarm_troughs['tec_ind'] % 24)]
+            self._plot_single(i, st, plot_dir)

@@ -27,17 +27,16 @@ if trough:
     ...
 ```
 """
+
+SATELLITES = {'swarm': ('A', 'B', 'C'), 'dmsp': ('dmsp15', 'dmsp16', 'dmsp17', 'dmsp18')}
+DIRECTIONS = {'up': (45, 75), 'down': (75, 45)}
+
 import numpy as np
 import bottleneck as bn
 import pandas
 from scipy.interpolate import interp1d
 
 from ttools import io, utils
-
-SWARM_SATELLITES = ('A', 'B', 'C')
-SWARM_DIRECTIONS = ('up', 'down')
-SWARM_LOW_SATELLITE_PAIR = ('A', 'C')
-SWARM_HIGH_SATTELITE = 'B'
 
 
 def fix_latlon(lat, lon):
@@ -73,7 +72,7 @@ def fix_latlon(lat, lon):
     return fixed_lat, fixed_lon
 
 
-def process_swarm_data_interval(data, times, median_window=3, mean_window=481):
+def process_data_interval(times, ne, extra_data=None, median_window=3, mean_window=481):
     """take log of Ne, perform moving median filter, estimate background using moving average filter
 
     Parameters
@@ -85,15 +84,15 @@ def process_swarm_data_interval(data, times, median_window=3, mean_window=481):
     -------
     times, log_ne, background, mlat, mlt
     """
-    ne = data['n']
+    if extra_data is None:
+        extra_data = []
     ne[ne <= 0] = np.nan  # get rid of zeros
     log_ne = np.log10(ne)  # take log
     log_ne = utils.centered_bn_func(bn.move_median, log_ne, median_window, min_count=1)  # median
-    times, mlat, mlt = utils.moving_func_trim(median_window, times, data['mlat'], data['mlt'])  # trim
+    times, *extra_data = utils.moving_func_trim(median_window, times, *extra_data)  # trim
     background = utils.centered_bn_func(bn.move_mean, log_ne, mean_window, min_count=10)  # moving average
-    times, log_ne, mlat, mlt = utils.moving_func_trim(mean_window, times, log_ne, mlat, mlt)  # trim
-    mlt[mlt > 12] -= 24
-    return times, log_ne, background, mlat, mlt
+    times, log_ne, *extra_data = utils.moving_func_trim(mean_window, times, log_ne, *extra_data)  # trim
+    return [times, log_ne, background] + extra_data
 
 
 def get_closest_segment(timestamp, mlat, tec_time, enter_lat, exit_lat=None):
@@ -161,8 +160,7 @@ def get_region_bounds(enter_mask, exit_mask):
     return starts[start_pick_ind], ends[end_pick_mask][end_pick_ind]
 
 
-def find_troughs_in_segment(mlat, smooth_dne, threshold=-.2, width_min=1, width_max=17,
-                            fin_rmin=.25):
+def find_troughs_in_segment(mlat, smooth_dne, threshold=-.15, width_min=1, width_max=17, fin_rmin=.25):
     """find troughs in a 45-75 segment. `mlat` contains no NaNs, smooth_dne may contain NaNs.
 
     Parameters
@@ -180,6 +178,8 @@ def find_troughs_in_segment(mlat, smooth_dne, threshold=-.2, width_min=1, width_
     # fill NaNs
     fin_mask = np.isfinite(smooth_dne)
     smooth_dne_i = smooth_dne.copy()  # i for interpolated
+    if not fin_mask.any():
+        return []
     if not fin_mask.all():
         interpolator = interp1d(mlat[fin_mask], smooth_dne[fin_mask], kind='previous', bounds_error=False, fill_value=0)
         smooth_dne_i[~fin_mask] = interpolator(mlat[~fin_mask])
@@ -200,21 +200,22 @@ def find_troughs_in_segment(mlat, smooth_dne, threshold=-.2, width_min=1, width_
             continue
         if fin_mask[edge_1:edge_2].mean() < fin_rmin:
             continue
-        min_idx = edge_1 + np.nanargmin(smooth_dne_i[edge_1:edge_2])
-        dne_min = smooth_dne_i[min_idx]
+        min_idx = edge_1 + np.nanargmin(smooth_dne[edge_1:edge_2])
+        dne_min = smooth_dne[min_idx]
         if dne_min <= threshold:
             trough_candidates.append((min_idx, edge_1, edge_2))
     return trough_candidates
 
 
-def get_segments_data(tec_times):
-    """This function collects and organizes SWARM data into "orbital segments" from 45 - 75 mlat. There are two
+def get_segments_data(tec_times, mission, *extra_data_keys, get_data_func=None):
+    """This function collects and organizes satellite data into "orbital segments" from 45 - 75 mlat. There are two
     orbital segments per orbit of the satellite: 'up' and 'down', where the mlat is increasing and decreasing with
-    time respectively. Finally there are three satellites and so for each tec time, there are six swarm segments.
+    time respectively. Finally there are multiple satellites and so for each tec time, there are 2 * n_sats segments.
 
     Parameters
     ----------
     tec_times: numpy.ndarray[datetime64]
+    mission: str
 
     Returns
     -------
@@ -233,73 +234,96 @@ def get_segments_data(tec_times):
             ]
         }
     """
+    ne_key = 'n'
+    if mission.lower() == 'swarm':
+        get_data = io.get_swarm_data
+        if not extra_data_keys:
+            extra_data_keys = ('mlat', 'mlt')
+    elif mission.lower() == 'dmsp':
+        get_data = io.get_dmsp_data
+        ne_key = 'ne'
+        if not extra_data_keys:
+            extra_data_keys = ('mlat', 'mlt', 'hor_ion_v')
+    if get_data_func is not None:
+        get_data = get_data_func
+
+    satellites = SATELLITES[mission]
+
     dt = np.timedelta64(5, 'h')
     i = np.argwhere(abs(np.diff(tec_times)) > 2 * dt)[:, 0]
     interval_start = np.concatenate((tec_times[[0]], tec_times[i + 1]), axis=0) - dt
     interval_end = np.concatenate((tec_times[i], tec_times[[-1]]), axis=0) + dt
-    DIRECTIONS = ['up', 'down']
-    ENTER_EXIT_TUPLES = [(45, 75), (75, 45)]
-    swarm_segments = {sat: {direction: [] for direction in DIRECTIONS} for sat in SWARM_SATELLITES}
+    sat_segments = {sat: {direction: [] for direction in DIRECTIONS} for sat in satellites}
+
     for idx in range(len(interval_start)):
         tt = tec_times[(tec_times > interval_start[idx]) * (tec_times < interval_end[idx])]
-        swarm_data, swarm_times = io.get_swarm_data(interval_start[idx], interval_end[idx])
-        for sat in SWARM_SATELLITES:
-            times, log_ne, background, mlat, mlt = process_swarm_data_interval(swarm_data[sat], swarm_times)
+        sat_data, sat_times = get_data(interval_start[idx], interval_end[idx])
+        for sat in satellites:
+            if mission == 'dmsp':
+                times, log_ne, background, *extra_data = process_data_interval(sat_times, sat_data[sat][ne_key], [sat_data[sat][key] for key in extra_data_keys], mean_window=321)
+            else:
+                times, log_ne, background, *extra_data = process_data_interval(sat_times, sat_data[sat][ne_key], [sat_data[sat][key] for key in extra_data_keys])
+            if 'hor_ion_v' in extra_data_keys:
+                extra_data[-1] = utils.centered_bn_func(bn.move_mean, extra_data[-1], 9, pad=True, min_count=1)
+            if 'T_elec' in extra_data_keys:
+                extra_data[-1] = utils.centered_bn_func(bn.move_mean, extra_data[-1], 11, pad=True, min_count=1)
             dne = log_ne - background
             smooth_dne = utils.centered_bn_func(bn.move_mean, dne, 9, pad=True, min_count=1)
-            fin_mask = np.isfinite(mlat)
-            for direction, (enter, exit) in zip(DIRECTIONS, ENTER_EXIT_TUPLES):
-                starts, stops = get_closest_segment(times[fin_mask], mlat[fin_mask], tt, enter, exit)
+            fin_mask = np.isfinite(extra_data[0])
+            for direction, (enter, exit) in DIRECTIONS.items():
+                starts, stops = get_closest_segment(times[fin_mask], extra_data[0][fin_mask], tt, enter, exit)
                 for i, (start, stop) in enumerate(zip(starts, stops)):
                     sl = slice(start, stop)
                     segment_data = {
                         'times': times[fin_mask][sl],
-                        'mlat': mlat[fin_mask][sl],
-                        'mlt': mlt[fin_mask][sl],
                         'log_ne': log_ne[fin_mask][sl],
                         'dne': dne[fin_mask][sl],
                         'smooth_dne': smooth_dne[fin_mask][sl],
                         'direction': direction,
                         'tec_time': tec_times[i],
                     }
-                    swarm_segments[sat][direction].append(segment_data)
-    return swarm_segments
+                    for i, key in enumerate(extra_data_keys):
+                        segment_data[key] = extra_data[i][fin_mask][sl]
+                    sat_segments[sat][direction].append(segment_data)
+    return sat_segments
 
 
-def get_swarm_troughs(swarm_segments):
-    swarm_troughs = []
-    swarm_id = 0
-    for sat, sat_segments in swarm_segments.items():
-        for direction, segments in sat_segments.items():
-            for i, segment in enumerate(segments):
-                trough_candidates = find_troughs_in_segment(segment['mlat'], segment['smooth_dne'])
+def get_troughs(segments):
+    sat_troughs = []
+    sat_ind = 0
+    for sat, sat_segments in segments.items():
+        for direction, segms in sat_segments.items():
+            for i, seg in enumerate(segms):
+                trough_candidates = find_troughs_in_segment(seg['mlat'], seg['smooth_dne'])
                 data_rows = []
-                seg_info = (swarm_id, sat, segment['mlat'][0], segment['mlt'][0], segment['mlat'][-1],
-                            segment['mlt'][-1], i, direction)
+                seg_info = (sat_ind, sat, seg['mlat'][0], seg['mlt'][0], seg['mlat'][-1],
+                            seg['mlt'][-1], i, direction)
                 trough_unpacked = (False, 0, 0, 0, 0, 0, 0, 0)
                 data_rows.append(trough_unpacked + seg_info)
                 for tc in trough_candidates:
                     min_idx, e1_idx, e2_idx = tc
-                    trough_unpacked = (True, segment['mlat'][min_idx], segment['mlt'][min_idx],
-                                       segment['smooth_dne'][min_idx], segment['mlat'][e1_idx], segment['mlt'][e1_idx],
-                                       segment['mlat'][e2_idx], segment['mlt'][e2_idx])
+                    trough_unpacked = (True, seg['mlat'][min_idx], seg['mlt'][min_idx], seg['smooth_dne'][min_idx],
+                                       seg['mlat'][e1_idx], seg['mlt'][e1_idx], seg['mlat'][e2_idx], seg['mlt'][e2_idx])
                     data_rows.append(trough_unpacked + seg_info)
-                swarm_troughs += data_rows
-                swarm_id += 1
-    swarm_troughs = pandas.DataFrame(data=swarm_troughs,
-                                     columns=['trough', 'min_mlat', 'min_mlt', 'min_dne', 'e1_mlat', 'e1_mlt',
-                                              'e2_mlat', 'e2_mlt', 'swarm_id', 'sat', 'seg_e1_mlat', 'seg_e1_mlt',
-                                              'seg_e2_mlat', 'seg_e2_mlt', 'tec_ind', 'direction'])
-    return swarm_troughs
+                sat_troughs += data_rows
+                sat_ind += 1
+    sat_troughs = pandas.DataFrame(data=sat_troughs,
+                                   columns=['trough', 'min_mlat', 'min_mlt', 'min_dne', 'e1_mlat', 'e1_mlt', 'e2_mlat',
+                                            'e2_mlt', 'sat_ind', 'sat', 'seg_e1_mlat', 'seg_e1_mlt', 'seg_e2_mlat',
+                                            'seg_e2_mlt', 'tec_ind', 'direction'])
+    assert not np.any(np.isnan(sat_troughs[['min_mlat', 'min_mlt', 'min_dne', 'e1_mlat', 'e1_mlt', 'e2_mlat', 'e2_mlt',
+                                            'sat_ind', 'seg_e1_mlat', 'seg_e1_mlt', 'seg_e2_mlat', 'seg_e2_mlt',
+                                            'tec_ind']]))
+    return sat_troughs
 
 
 def fix_trough_list(troughs):
-    repeats = np.argwhere((troughs['swarm_id'].values[:-1] == 143) & (troughs['swarm_id'].values[1:] == 0))[:, 0] + 1
+    repeats = np.argwhere((troughs['sat_ind'].values[:-1] == 143) & (troughs['sat_ind'].values[1:] == 0))[:, 0] + 1
     tec_ind = troughs['tec_ind'].values
-    swarm_id = troughs['swarm_id'].values
+    sat_ind = troughs['sat_ind'].values
     for r in repeats:
         tec_ind[r:] += 24
-        swarm_id[r:] += 144
+        sat_ind[r:] += 144
     troughs['tec_ind'] = tec_ind
-    troughs['swarm_id'] = swarm_id
+    troughs['sat_ind'] = sat_ind
     return troughs

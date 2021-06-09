@@ -9,13 +9,15 @@ dependencies:
   - scikit-learn
   - bottleneck
   - pandas
-  - tables
   - pytest
   - h5py
   - cvxpy
+  - matplotlib
+  - seaborn
   - pip
   - pip:
     - apexpy
+    - tables
 
 # install gurobi if possible, it is much faster, get a license then:
 # python -m pip install -i https://pypi.gurobi.com gurobipy

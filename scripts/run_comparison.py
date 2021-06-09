@@ -5,8 +5,8 @@ if __name__ == "__main__":
 
     t0 = time.time()
 
-    comparison_manager = compare.ComparisonManager.random_dates(3, plot_dir="E:\\temp_plots")
-    job_manager = TroughLabelJobManager(ImageProcessingLabelJob)
+    comparison_manager = compare.ComparisonManager.random_dates(100)#, plot_dir="E:\\temp_plots")
+    job_manager = TroughLabelJobManager(RbfInversionLabelJob, threshold=None)
     results = comparison_manager.run_comparison(job_manager)
     stats = compare.process_results(results, bad_mlon_range=[130, 260])
     for k, v in stats.items():

@@ -42,13 +42,7 @@ ax[0].set_title('Accuracy')
 ax[1].set_xlabel('MLT')
 ax[1].set_title('Width Difference')
 
-fail_mask = np.any((diffs < diffs.quantile(.01)) + (diffs > diffs.quantile(.99)), axis=1)
-fail_ind = fail_mask.index.values[fail_mask.values]
-
-results.iloc[fail_ind]
-
 g = sns.PairGrid(diffs)
-g.map_upper(sns.scatterplot, s=2)
 g.map_lower(sns.scatterplot, s=2)
 g.map_diag(sns.histplot, kde=True)
 plt.show()

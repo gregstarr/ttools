@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ttools import io, config, swarm, plotting
+from ttools import io, config, satellite, plotting
 
 
 if __name__ == "__main__":
@@ -25,8 +25,8 @@ if __name__ == "__main__":
 
     for i in idx[::-1]:
         print(i)
-        swarm_segments = swarm.get_segments_data(trough_data['time'][kp <= 2][i:i+1])
-        swarm_troughs = swarm.get_swarm_troughs(swarm_segments)
+        swarm_segments = satellite.get_segments_data(trough_data['time'][kp <= 2][i:i+1])
+        swarm_troughs = satellite.get_swarm_troughs(swarm_segments)
 
         polar_fig, polar_ax = plt.subplots(1, 3, figsize=(18, 10), subplot_kw=dict(projection='polar'), tight_layout=True)
         line_fig, line_ax = plt.subplots(3, 2, figsize=(20, 12), tight_layout=True, sharex=True, sharey=True)

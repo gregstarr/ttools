@@ -93,7 +93,8 @@ def centered_bn_func(func, arr, window_diameter, pad=False, **kwargs):
     window_radius = window_diameter // 2
     assert (2 * window_radius + 1) == window_diameter, "window_diameter must be odd"
     if pad:
-        arr = np.pad(arr, window_radius, mode='edge')
+        pad_tuple = ((window_radius, window_radius), ) + ((0, 0), ) * (arr.ndim - 1)
+        arr = np.pad(arr, pad_tuple, mode='edge')
     return func(arr, window_diameter, **kwargs)[2 * window_radius:]
 
 
@@ -241,7 +242,7 @@ def concatenate(*lists, axis=0):
     return (np.concatenate(list_, axis=axis) for list_ in lists)
 
 
-def get_random_dates(n, start_date=np.datetime64("2014-01-01"), end_date=np.datetime64("2020-01-01")):
+def get_random_dates(n, start_date=np.datetime64("2014-01-02"), end_date=np.datetime64("2020-01-01")):
     time_range_days = (end_date - start_date).astype('timedelta64[D]').astype(int)
     offsets = np.sort(np.random.choice(np.arange(time_range_days), n, False))
     return start_date + offsets.astype('timedelta64[D]')

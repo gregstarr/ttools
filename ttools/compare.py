@@ -14,13 +14,14 @@ import os
 from scipy import stats
 import time
 import itertools
+from matplotlib import pyplot as plt
 
-from ttools import io, swarm, utils, config, convert, tec as ttec
+from ttools import io, satellite, utils, config, convert, tec as ttec, plotting
 from ttools.trough_labeling import TroughLabelJobManager
 
 
 def compare(times, tec_troughs, swarm_troughs, ssmlon, swarm_grid_x=None, swarm_grid_y=None, mlat_grid=None, mlt_grid=None, mlat_profs=None):
-    _, unique_swarm_idx, inv = np.unique(swarm_troughs['swarm_id'], return_index=True, return_inverse=True)
+    _, unique_swarm_idx, inv = np.unique(swarm_troughs['sat_ind'], return_index=True, return_inverse=True)
     if mlat_grid is None:
         mlat_grid = config.mlat_grid
     if mlt_grid is None:
@@ -93,13 +94,14 @@ def compile_comparison_results(times, swarm_troughs, tec_trough_found, tec_e1, t
     pre_results['swarm_pwall'] = np.where(swarm_troughs['direction'] == 'up', swarm_troughs['e2_mlat'],
                                           swarm_troughs['e1_mlat'])
     pre_results['mlt'] = seg_mlt
-    pre_results['mlon'] = convert.mlt_to_mlon_sub(seg_mlt, ssmlon[swarm_troughs['tec_ind']])
+    if ssmlon is not None:
+        pre_results['mlon'] = convert.mlt_to_mlon_sub(seg_mlt, ssmlon[swarm_troughs['tec_ind']])
     pre_results['id'] = np.arange(swarm_troughs.shape[0])
 
     # process the pre_results: output should be a single up / down for each satellite for each tec map
     results = []
-    for i in np.unique(swarm_troughs['swarm_id'].values):
-        mask = swarm_troughs['swarm_id'] == i
+    for i in np.unique(swarm_troughs['sat_ind'].values):
+        mask = swarm_troughs['sat_ind'] == i
         candidates = pre_results[mask]
         if not candidates['tec_trough'].iloc[0]:
             # if no tec trough, use normal swarm defn
@@ -162,12 +164,17 @@ def get_diffs(results):
 
 
 def random_parameter_search(job_class, n_experiments, n_trials, base_dir="E:\\trough_comparison"):
-    processed_results = []
+    results_file = os.path.join(base_dir, "results.csv")
+    if os.path.isfile(results_file):
+        processed_results = pandas.read_csv(results_file, index_col=0).to_dict('records')
+    else:
+        processed_results = []
+    prev_max_exp = max([int(d[11:]) for d in os.listdir(base_dir) if not os.path.splitext(d)[1]])
     # get random days
     comparison_manager = ComparisonManager.random_dates(n_trials)
     for i in range(n_experiments):
         # setup directory
-        experiment_dir = os.path.join(base_dir, f"experiment_{i}")
+        experiment_dir = os.path.join(base_dir, f"experiment_{i + prev_max_exp + 1}")
         os.makedirs(experiment_dir, exist_ok=True)
         job_manager = TroughLabelJobManager.get_random(job_class, experiment_dir)
         t0 = time.time()
@@ -224,13 +231,32 @@ class ComparisonManager:
         times = []
         for date in dates:
             t = np.arange(date, date + np.timedelta64(1, 'D'), np.timedelta64(1, 'h'))
-            swarm_segments = swarm.get_segments_data(t)
-            swarm_trough = swarm.get_swarm_troughs(swarm_segments)
+            swarm_segments = satellite.get_segments_data(t, 'swarm')
+            swarm_trough = satellite.get_troughs(swarm_segments)
             swarm_troughs.append(swarm_trough)
             times.append(t)
+            if plot_dir is not None:
+                for i in range(24):
+                    troughs = swarm_trough[swarm_trough['tec_ind'] == i]
+                    fig, ax = plt.subplots(3, 2, figsize=(16, 10), tight_layout=True, sharex=True, sharey=True)
+                    for s, (sat, sat_segments) in enumerate(swarm_segments.items()):
+                        sat_troughs = troughs[troughs['sat'] == sat]
+                        for d, (direction, segments) in enumerate(sat_segments.items()):
+                            if i >= len(segments):
+                                break
+                            tcs = sat_troughs[sat_troughs['direction'] == direction]
+                            ax[s, d].plot(segments[i]['mlat'], segments[i]['smooth_dne'])
+                            ax[s, d].plot(segments[i]['mlat'], segments[i]['dne'], 'k.', ms=1)
+                            for _, tc in tcs[1:].iterrows():
+                                ax[s, d].plot(tc[['e1_mlat', 'e2_mlat']], [0, 0], 'r', linestyle='solid', marker='|', ms=10)
+                                ax[s, d].plot(tc['min_mlat'], tc['min_dne'], 'rx')
+                            ax[s, d].set_title(f"mlt: {tcs['seg_e1_mlt'].iloc[0]}, sat: {sat}")
+                            ax[s, d].grid(True)
+                    fig.savefig(os.path.join(plot_dir, f"{date.astype('datetime64[D]')}_{i}_swarm.png"))
+                    plt.close(fig)
         self.swarm_troughs = pandas.concat(swarm_troughs, ignore_index=True)
-        self.swarm_troughs = swarm.fix_trough_list(self.swarm_troughs)
-        _, self.unique_swarm_idx = np.unique(self.swarm_troughs['swarm_id'].values, return_index=True)
+        self.swarm_troughs = satellite.fix_trough_list(self.swarm_troughs)
+        _, self.unique_swarm_idx = np.unique(self.swarm_troughs['sat_ind'].values, return_index=True)
         self.times = np.concatenate(times, axis=0)
         self.swarm_grid_x, self.swarm_grid_y = get_swarm_grid_cells(self.swarm_troughs.iloc[self.unique_swarm_idx],
                                                                     config.mlat_grid, config.mlt_grid)
@@ -274,9 +300,9 @@ class ComparisonManager:
         print("Concatenating...")
         model_output, arb = utils.concatenate(data['model_output'], data['arb'])
         print("Optimizing threshold...")
-        alpha_1 = .12
-        alpha_2 = .12
-        thresholds = np.linspace(-.3, .7, 20)
+        alpha_1 = .15
+        alpha_2 = .15
+        thresholds = np.linspace(0, 1.5, 20)
         loss = np.zeros_like(thresholds)
         for i, t in enumerate(thresholds):
             tec_troughs = model_output >= t
