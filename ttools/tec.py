@@ -52,9 +52,9 @@ def fix_boundaries(labels):
     return fixed
 
 
-def remove_auroral(inp, arb):
+def remove_auroral(inp, arb, offset=3):
     output = inp.copy()
-    output *= (config.mlat_grid[None, :, :] < arb[:, None, :])
+    output *= (config.mlat_grid[None, :, :] < arb[:, None, :] + offset)
     return output
 
 

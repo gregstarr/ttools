@@ -242,7 +242,9 @@ def concatenate(*lists, axis=0):
     return (np.concatenate(list_, axis=axis) for list_ in lists)
 
 
-def get_random_dates(n, start_date=np.datetime64("2014-01-02"), end_date=np.datetime64("2020-01-01")):
+def get_random_dates(n, start_date=np.datetime64("2014-01-02"), end_date=np.datetime64("2019-12-30")):
     time_range_days = (end_date - start_date).astype('timedelta64[D]').astype(int)
     offsets = np.sort(np.random.choice(np.arange(time_range_days), n, False))
-    return start_date + offsets.astype('timedelta64[D]')
+    dates = start_date + offsets.astype('timedelta64[D]')
+    assert np.unique(dates).shape[0] == n
+    return dates

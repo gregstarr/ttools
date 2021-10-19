@@ -7,20 +7,22 @@ from ttools import tec as ttec, io, utils
 
 class TroughLabelJobManager:
 
-    def __init__(self, job_class, *args, **kwargs):
+    def __init__(self, job_class, **kwargs):
         self.job_class = job_class
-        self._job = job_class(None, *args, **kwargs)
-        self._args = args
+        self._job = job_class(None, **kwargs)
         self._kwargs = kwargs
+        self.save_dir = None
 
     @classmethod
     def get_random(cls, job_class, params_dir):
         params = job_class.get_random_params()
         io.write_yaml(os.path.join(params_dir, 'params.yaml'), **params)
-        return cls(job_class, **params)
+        obj = cls(job_class, **params)
+        obj.save_dir = params_dir
+        return obj
 
     def make_job(self, date):
-        return self.job_class(date, *self._args, **self._kwargs)
+        return self.job_class(date, **self._kwargs)
 
     def __getattr__(self, item):
         return getattr(self._job, item)
@@ -28,9 +30,9 @@ class TroughLabelJobManager:
 
 class TroughLabelJob(abc.ABC):
 
-    def __init__(self, date, bg_est_shape, *args, **kwargs):
+    def __init__(self, date, **kwargs):
         self.date = date
-        self.bg_est_shape = bg_est_shape
+        self.bg_est_shape = kwargs['bg_est_shape']
         self.tec = None
         self.tec_times = None
         self.x = None
@@ -39,7 +41,6 @@ class TroughLabelJob(abc.ABC):
         self.arb = None
         if date is not None:
             self.load_data()
-
         self.model_output = None
         self.trough = None
 

@@ -192,7 +192,7 @@ def get_swarm_data(start_date, end_date, data_dir=None):
     end_date = (np.ceil(end_date.astype('datetime64[ms]').astype(float) / dt_sec) * dt_sec).astype('datetime64[ms]')
     ref_times = np.arange(start_date, end_date, dt)
     ref_times_ut = ref_times.astype('datetime64[ms]').astype(float)
-    keys = ['n', 'mlat', 'mlon', 'mlt']
+    keys = ['n', 'mlat', 'mlon', 'mlt']#, 'viy']
     data = {sat: {key: [] for key in keys} for sat in SATELLITES['swarm']}
     file_dates = np.unique(ref_times.astype('datetime64[M]'))
     file_dates = utils.decompose_datetime64(file_dates)
@@ -231,6 +231,7 @@ def open_swarm_file(fn):
                 'mlat': f[f'/swarm{sat}/apex_lat'][()],
                 'mlon': f[f'/swarm{sat}/apex_lon'][()],
                 'mlt': f[f'/swarm{sat}/mlt'][()],
+                # 'viy': f[f'/swarm{sat}/Viy'][()],
             }
     print(f"Opened SWARM file: {fn}, size: {ut.shape}")
     return data, ut
@@ -291,6 +292,59 @@ def open_tec_file(fn):
         ssmlon = f['ssmlon'][()]
     print(f"Opened TEC file: {fn}, size: {tec.shape}")
     return tec, times, ssmlon, n, std
+
+
+def get_superdarn_data(start_date, end_date, dt=np.timedelta64(1, 'h'), data_dir=None):
+    """Gets Superdarn flow data and timestamps
+
+    Parameters
+    ----------
+    start_date, end_date: np.datetime64
+    data_dir: str
+
+    Returns
+    -------
+    fx, fy, times: numpy.ndarray
+    """
+    if data_dir is None:
+        data_dir = config.superdarn_dir
+    dt_sec = dt.astype('timedelta64[s]').astype(int)
+    start_date = (np.ceil(start_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
+    end_date = (np.ceil(end_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
+    ref_times = np.arange(start_date, end_date, dt)
+    ref_times_ut = ref_times.astype('datetime64[s]').astype(int)
+    fx = []
+    fy = []
+    file_dates = np.unique(ref_times.astype('datetime64[M]'))
+    file_dates = utils.decompose_datetime64(file_dates)
+    for i in range(file_dates.shape[0]):
+        y = file_dates[i, 0]
+        m = file_dates[i, 1]
+        fn = os.path.join(data_dir, "{year:04d}_{month:02d}_superdarn.h5".format(year=y, month=m))
+        x, y, ut = open_superdarn_file(fn)
+        in_time_mask = np.in1d(ut, ref_times_ut)
+        fx.append(x[in_time_mask])
+        fy.append(y[in_time_mask])
+    return np.concatenate(fx, axis=0), np.concatenate(fy, axis=0), ref_times
+
+
+def open_superdarn_file(fn):
+    """Open a monthly superdarn file, return its data
+
+    Parameters
+    ----------
+    fn: str
+
+    Returns
+    -------
+    tec, times, ssmlon, n, std: numpy.ndarray
+    """
+    with h5py.File(fn, 'r') as f:
+        fx = f['fx'][()]
+        fy = f['fy'][()]
+        times = f['time'][()]
+    print(f"Opened Superdarn file: {fn}, size: {fx.shape}")
+    return fx, fy, times
 
 
 def get_arb_data(start_date, end_date, dt=np.timedelta64(1, 'h'), data_dir=None):

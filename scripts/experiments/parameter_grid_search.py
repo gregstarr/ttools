@@ -6,10 +6,12 @@ plt.style.use('ggplot')
 cmap = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
 params = []
-for i in range(200):
+i = 0
+while True:
     try:
         with open(f"E:\\trough_comparison\\experiment_{i}\\params.yaml") as f:
             params.append(yaml.load(f))
+        i += 1
     except:
         break
 

@@ -7,7 +7,7 @@ from ttools import tec as ttec, config, utils, plotting
 from ttools.trough_labeling.labeler import TroughLabelJob
 
 
-def get_sparse_diff(x, axis, size, pad_wrap, median_shape=None, softmax_multiplier=0, mean_shape=None):
+def get_sparse_diff(x, axis, size, pad_wrap, median_shape=None, softmax_multiplier=0, mean_shape=None, grad_th=.01):
     pad_arg = [(0, 0)] * 3
     pad_arg[axis] = (1, 0)
     pad = np.pad(x, pad_arg, pad_wrap)
@@ -28,7 +28,7 @@ def get_sparse_diff(x, axis, size, pad_wrap, median_shape=None, softmax_multipli
         max_id = exp[slicer]
         grad = np.nansum(utils.extract_patches(grad, max_filter_shape), axis=(-1, -2, -3)) * max_id
     else:
-        max_id = (patches == np.nanmax(patches, axis=(-1, -2, -3), keepdims=True))
+        max_id = (patches == np.nanmax(patches, axis=(-1, -2, -3), keepdims=True)) & (patches > grad_th)
         max_id = max_id[slicer]
         grad = np.nansum(utils.extract_patches(grad, max_filter_shape), axis=(-1, -2, -3)) * max_id
     if mean_shape is not None:
@@ -55,20 +55,20 @@ PARAM_SAMPLING = {
 }
 
 
-BG_EST_SHAPE = (1, 19, 11)
-PRIOR_WEIGHT = .5
-TV_WEIGHT = .3
+BG_EST_SHAPE = (1, 19, 17)
+PRIOR_WEIGHT = 1
+TV_WEIGHT = 2
 PERIMETER_TH = 40
 AREA_TH = 40
-PRIOR_OFFSET = -3
+PRIOR_OFFSET = -1
 PRIOR_ORDER = 1
-X_MAX_FILTER_SIZE = 5
+X_MAX_FILTER_SIZE = 3
 Y_MAX_FILTER_SIZE = 5
-MEAN_FILTER_SIZE = 5
-MEDIAN_FILTER_SIZE = 5
+MEAN_FILTER_SIZE = 15
+MEDIAN_FILTER_SIZE = 7
 SOFTMAX_SCALE = 0
-THRESHOLD = 0.1
-CLOSING_RAD = 0
+THRESHOLD = 0.0
+CLOSING_RAD = 1
 
 
 class ImageProcessingLabelJob(TroughLabelJob):
@@ -78,9 +78,7 @@ class ImageProcessingLabelJob(TroughLabelJob):
                  x_max_filter_size=X_MAX_FILTER_SIZE, y_max_filter_size=Y_MAX_FILTER_SIZE,
                  mean_filter_size=MEAN_FILTER_SIZE, median_filter_size=MEDIAN_FILTER_SIZE, softmax_scale=SOFTMAX_SCALE,
                  threshold=THRESHOLD, closing_rad=CLOSING_RAD):
-        super().__init__(date, bg_est_shape, prior_weight, tv_weight, perimeter_th, area_th, prior_offset, prior_order,
-                         x_max_filter_size, y_max_filter_size, mean_filter_size, median_filter_size, softmax_scale,
-                         threshold, closing_rad)
+        super().__init__(date, bg_est_shape=bg_est_shape)
         self.prior_weight = prior_weight
         self.tv_weight = tv_weight
         self.perimeter_th = perimeter_th
@@ -165,7 +163,7 @@ class ImageProcessingLabelJob(TroughLabelJob):
             'prior': {'data': self.prior[i], 'kwargs': dict(vmin=-1, vmax=1, cmap='coolwarm')},
             'g_x': {'data': self.gx[i], 'kwargs': dict(vmin=-.25, vmax=.25, cmap='coolwarm')},
             'g_y': {'data': self.gy[i], 'kwargs': dict(vmin=-.25, vmax=.25, cmap='coolwarm')},
-            'tv': {'data': self.tv[i], 'kwargs': dict(vmin=-1, vmax=1, cmap='coolwarm')},
+            'tv': {'data': self.tv[i], 'kwargs': dict(vmin=-.25, vmax=.25, cmap='coolwarm')},
             'output': {'data': self.model_output[i], 'kwargs': dict(vmin=-1, vmax=1, cmap='coolwarm')},
             'trough': {'data': self.trough[i], 'kwargs': dict(cmap='Blues')},
         }

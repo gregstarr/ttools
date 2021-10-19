@@ -2,34 +2,25 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 
-from ttools import rbf_inversion, io, utils, plotting, config
+from ttools import io, utils, plotting, config
+from ttools.trough_labeling import rbf_inversion
 
 
 def run_single(date, i, bg_est_shape, model_weight_max, rbf_bw, tv_hw, tv_vw, l2_weight, tv_weight, perimeter_th,
-               area_th, artifact_key, prior_order, prior, prior_arb_offset):
-    # get tec data, run trough detection algo
-    tec_start = date - np.floor(bg_est_shape[0] / 2) * one_h
-    tec_end = date + (np.floor(bg_est_shape[0] / 2) + 1) * one_h
-    tec, times, ssmlon, n = io.get_tec_data(tec_start, tec_end)
-    ssmlon, = utils.moving_func_trim(bg_est_shape[0], ssmlon)
-    arb, _ = io.get_arb_data(date, date + one_h)
-
-    artifacts = None
-    if artifact_key is not None:
-        artifacts = rbf_inversion.get_artifacts(ssmlon, artifact_key)
-
-    tec_troughs, x, model = rbf_inversion.get_tec_troughs(tec, times, bg_est_shape, model_weight_max, rbf_bw, tv_hw, tv_vw,
-                                                          l2_weight, tv_weight, perimeter_th, area_th, artifacts, arb,
-                                                          prior_order, prior, prior_arb_offset, return_model_output=True)
+               area_th, prior_order, prior, prior_arb_offset):
+    job = rbf_inversion.RbfInversionLabelJob(date, bg_est_shape, model_weight_max, rbf_bw, tv_hw, tv_vw, l2_weight,
+                                             tv_weight, prior_order, prior, prior_arb_offset, perimeter_th, area_th,
+                                             threshold=1)
+    job.run()
 
     polar_fig, polar_ax = plt.subplots(1, 3, figsize=(18, 10), subplot_kw=dict(projection='polar'), tight_layout=True)
-    plotting.polar_pcolormesh(polar_ax[0], config.mlat_grid, config.mlt_grid, x[0], vmin=-.5, vmax=.5, cmap='coolwarm')
-    plotting.polar_pcolormesh(polar_ax[1], config.mlat_grid, config.mlt_grid, model[0], vmin=0, vmax=1, cmap='Blues')
-    plotting.polar_pcolormesh(polar_ax[2], config.mlat_grid, config.mlt_grid, tec_troughs[0], vmin=0, vmax=1, cmap='Blues')
-    plotting.plot_arb(polar_ax[0], config.mlt_grid[0], arb[0])
-    plotting.plot_arb(polar_ax[1], config.mlt_grid[0], arb[0])
+    plotting.polar_pcolormesh(polar_ax[0], config.mlat_grid, config.mlt_grid, job.x[0], vmin=-.5, vmax=.5, cmap='coolwarm')
+    plotting.polar_pcolormesh(polar_ax[1], config.mlat_grid, config.mlt_grid, job.model_output[0], vmin=-2, vmax=2, cmap='coolwarm')
+    plotting.polar_pcolormesh(polar_ax[2], config.mlat_grid, config.mlt_grid, job.trough[0], vmin=0, vmax=1, cmap='Blues')
+    plotting.plot_arb(polar_ax[0], config.mlt_grid[0], job.arb[0])
+    plotting.plot_arb(polar_ax[1], config.mlt_grid[0], job.arb[0])
     plotting.format_polar_mag_ax(polar_ax)
-    polar_fig.savefig(os.path.join("E:\\algorithm1_parameters", f"{i}.png"))
+    polar_fig.savefig(os.path.join("C:\\Users\\Greg\\Desktop\\study plots\\a1_params", f"{i}.png"))
     plt.close(polar_fig)
 
 
@@ -46,7 +37,6 @@ if __name__ == "__main__":
         'tv_weight': .1,
         'perimeter_th': 50,
         'area_th': 50,
-        'artifact_key': '9',
         'prior_order': 1,
         'prior': 'auroral_boundary',
         'prior_arb_offset': -3
@@ -61,7 +51,6 @@ if __name__ == "__main__":
         'l2_weight': [.01, .1, .2],
         'tv_weight': [.01, .05, .2],
         'area_th': [10, 100],
-        'artifact_key': [None, '3', '5', '7', '9'],
         'prior_order': [1, 2],
         'prior': ['auroral_boundary', 'empirical_model'],
         'prior_arb_offset': [-2, -5, -7]
@@ -90,7 +79,7 @@ if __name__ == "__main__":
     plotting.plot_arb(polar_ax, config.mlt_grid[0], arb[0])
     plt.colorbar(pcm)
     plotting.format_polar_mag_ax(polar_ax)
-    polar_fig.savefig(os.path.join("E:\\algorithm1_parameters", f"base.png"))
+    polar_fig.savefig(os.path.join("C:\\Users\\Greg\\Desktop\\study plots\\a1_params", f"base.png"))
     plt.close(polar_fig)
 
     for p in param_output:

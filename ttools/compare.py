@@ -9,7 +9,7 @@ parameter search:
 """
 import numpy as np
 import pandas
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, matthews_corrcoef
 import os
 from scipy import stats
 import time
@@ -57,7 +57,7 @@ def get_profs(data_grid, grid_cell_x, grid_cell_y, reduce_func=np.nanmean):
     return profs
 
 
-def get_swarm_grid_cells(swarm_troughs, mlat_grid=None, mlt_grid=None, linewidth=3):
+def get_swarm_grid_cells(swarm_troughs, mlat_grid=None, mlt_grid=None, linewidth=4):
     if mlat_grid is None:
         mlat_grid = config.mlat_grid
     if mlt_grid is None:
@@ -81,7 +81,7 @@ def compile_comparison_results(times, swarm_troughs, tec_trough_found, tec_e1, t
     seg_mlt = utils.average_angles(t1, t2) * 12 / np.pi
     # compile results
     pre_results = pandas.DataFrame()
-    pre_results['time'] = times[swarm_troughs['tec_ind']]
+    pre_results['time'] = swarm_troughs['tec_time']
     pre_results['sat'] = swarm_troughs['sat']
     pre_results['swarm_dne'] = swarm_troughs['min_dne']
     pre_results['direction'] = swarm_troughs['direction']
@@ -167,9 +167,10 @@ def random_parameter_search(job_class, n_experiments, n_trials, base_dir="E:\\tr
     results_file = os.path.join(base_dir, "results.csv")
     if os.path.isfile(results_file):
         processed_results = pandas.read_csv(results_file, index_col=0).to_dict('records')
+        prev_max_exp = max([int(d[11:]) for d in os.listdir(base_dir) if not os.path.splitext(d)[1]])
     else:
         processed_results = []
-    prev_max_exp = max([int(d[11:]) for d in os.listdir(base_dir) if not os.path.splitext(d)[1]])
+        prev_max_exp = -1
     # get random days
     comparison_manager = ComparisonManager.random_dates(n_trials)
     for i in range(n_experiments):
@@ -189,49 +190,18 @@ def random_parameter_search(job_class, n_experiments, n_trials, base_dir="E:\\tr
         pandas.DataFrame(processed_results).to_csv(os.path.join(base_dir, "results.csv"))
 
 
-def grid_parameter_search(default_params, parameter_values, n_trials, base_dir="E:\\trough_comparison",
-                          start_date=np.datetime64("2014-01-01"), end_date=np.datetime64("2020-01-01")):
-    processed_results = []
-    grid_values = list(itertools.product(*parameter_values.values()))
-    grid_keys = [list(parameter_values.keys())] * len(grid_values)
-    i = 0
-    for grid_key, grid_value in zip(grid_keys, grid_values):
-        # setup directory
-        experiment_dir = os.path.join(base_dir, f"experiment_{i}")
-        os.makedirs(experiment_dir, exist_ok=True)
-
-        # get and save hyperparameter list
-        params = default_params.copy()
-        update = {key: value for key, value in zip(grid_key, grid_value)}
-        params.update(update)
-        print(params)
-        io.write_yaml(os.path.join(experiment_dir, 'params.yaml'), **params)
-
-        t0 = time.time()
-        results = run_n_random_days(n_trials, **params, start_date=start_date, end_date=end_date)
-        statistics = process_results(results, bad_mlon_range=[130, 260])
-        for k, v in statistics.items():
-            print(k, v)
-        results.to_csv(os.path.join(experiment_dir, "results.csv"))
-        tf = time.time()
-        print(f"THAT TOOK {(tf - t0) / 60} MINUTES")
-        processed_results.append(statistics)
-        pandas.DataFrame(processed_results).to_csv(os.path.join(base_dir, "results.csv"))
-
-        i += 1
-
-
 class ComparisonManager:
 
     def __init__(self, dates, plot_dir=None):
         self.dates = dates
+        self.thresholds = np.linspace(-1, 2, 31)
         # get swarm trough candidates
         print("Getting SWARM trough candidates...")
         swarm_troughs = []
         times = []
         for date in dates:
             t = np.arange(date, date + np.timedelta64(1, 'D'), np.timedelta64(1, 'h'))
-            swarm_segments = satellite.get_segments_data(t, 'swarm')
+            swarm_segments = satellite.get_segments_data(t)
             swarm_trough = satellite.get_troughs(swarm_segments)
             swarm_troughs.append(swarm_trough)
             times.append(t)
@@ -243,6 +213,7 @@ class ComparisonManager:
                         sat_troughs = troughs[troughs['sat'] == sat]
                         for d, (direction, segments) in enumerate(sat_segments.items()):
                             if i >= len(segments):
+                                print("AOSIUDHBNASOIDHBASOI")
                                 break
                             tcs = sat_troughs[sat_troughs['direction'] == direction]
                             ax[s, d].plot(segments[i]['mlat'], segments[i]['smooth_dne'])
@@ -250,14 +221,17 @@ class ComparisonManager:
                             for _, tc in tcs[1:].iterrows():
                                 ax[s, d].plot(tc[['e1_mlat', 'e2_mlat']], [0, 0], 'r', linestyle='solid', marker='|', ms=10)
                                 ax[s, d].plot(tc['min_mlat'], tc['min_dne'], 'rx')
-                            ax[s, d].set_title(f"mlt: {tcs['seg_e1_mlt'].iloc[0]}, sat: {sat}")
-                            ax[s, d].grid(True)
+                            if tcs.shape[0] > 0:
+                                ax[s, d].set_title(f"mlt: {tcs['seg_e1_mlt'].iloc[0]}, sat: {sat}")
+                                ax[s, d].grid(True)
+                            else:
+                                print("AOHSIUJFDOHUASFAFSA")
                     fig.savefig(os.path.join(plot_dir, f"{date.astype('datetime64[D]')}_{i}_swarm.png"))
                     plt.close(fig)
-        self.swarm_troughs = pandas.concat(swarm_troughs, ignore_index=True)
-        self.swarm_troughs = satellite.fix_trough_list(self.swarm_troughs)
-        _, self.unique_swarm_idx = np.unique(self.swarm_troughs['sat_ind'].values, return_index=True)
         self.times = np.concatenate(times, axis=0)
+        self.swarm_troughs = pandas.concat(swarm_troughs, ignore_index=True)
+        self.swarm_troughs = satellite.fix_trough_list(self.times, self.swarm_troughs)
+        _, self.unique_swarm_idx = np.unique(self.swarm_troughs['sat_ind'].values, return_index=True)
         self.swarm_grid_x, self.swarm_grid_y = get_swarm_grid_cells(self.swarm_troughs.iloc[self.unique_swarm_idx],
                                                                     config.mlat_grid, config.mlt_grid)
         self.ssmlon = None
@@ -300,36 +274,25 @@ class ComparisonManager:
         print("Concatenating...")
         model_output, arb = utils.concatenate(data['model_output'], data['arb'])
         print("Optimizing threshold...")
-        alpha_1 = .15
-        alpha_2 = .15
-        thresholds = np.linspace(0, 1.5, 20)
-        loss = np.zeros_like(thresholds)
-        for i, t in enumerate(thresholds):
+
+        troughs = []
+        for i, t in enumerate(self.thresholds):
             tec_troughs = model_output >= t
-            tec_troughs = ttec.postprocess(tec_troughs, job_manager.perimeter_th, job_manager.area_th, arb,
-                                           job_manager.closing_rad)
-            results = self._compare(tec_troughs)
-            mask = results['tec_trough'] & results['swarm_trough']
-            acc = np.mean(results['tec_trough'] == results['swarm_trough'])
-            ploss = alpha_1 * np.nanmean(abs(results[mask]['tec_pwall'] - results[mask]['swarm_pwall']))
-            eloss = alpha_2 * np.nanmean(abs(results[mask]['tec_ewall'] - results[mask]['swarm_ewall']))
-            closs = 1 - acc
-            loss[i] = ploss + eloss + closs
-            print(t, loss[i], ploss, eloss, closs, mask.sum())
-        threshold = thresholds[np.nanargmin(loss)]
-        tec_troughs = model_output >= threshold
-        tec_troughs = ttec.postprocess(tec_troughs, job_manager.perimeter_th, job_manager.area_th, arb)
-        return tec_troughs
+            tec_troughs = ttec.postprocess(tec_troughs, job_manager.perimeter_th, job_manager.area_th, arb, job_manager.closing_rad)
+            troughs.append(tec_troughs)
+        return troughs
 
     def _compare(self, tec_troughs):
         return compare(self.times, tec_troughs, self.swarm_troughs, self.ssmlon, self.swarm_grid_x, self.swarm_grid_y)
 
     def get_tec_troughs(self, job_manager):
-        if job_manager.threshold is None:
+        if hasattr(job_manager, "threshold") and (job_manager.threshold is None):
             return self._get_tec_troughs_opt(job_manager)
         else:
             return self._get_tec_troughs_no_opt(job_manager)
 
     def run_comparison(self, job_manager):
         tec_troughs = self.get_tec_troughs(job_manager)
+        if isinstance(tec_troughs, list):
+            return [self._compare(troughs) for troughs in tec_troughs]
         return self._compare(tec_troughs)

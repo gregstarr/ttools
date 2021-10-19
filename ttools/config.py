@@ -6,13 +6,13 @@ import cvxpy as cp
 
 base_dir = madrigal_dir = madrigal_lat = madrigal_lon = tec_dir = arb_dir = swarm_dir = swarm_coords_dir = kp_file \
     = grid_file = mlt_vals = mlat_vals = mlt_grid = mlat_grid = PARALLEL = artifact_file = SOLVER = omni_file \
-    = dmsp_dir = None
+    = dmsp_dir = superdarn_dir = None
 
 
 def update(_base_dir="E:\\"):
     global base_dir, madrigal_dir, madrigal_lat, madrigal_lon, tec_dir, arb_dir, swarm_dir, swarm_coords_dir
     global kp_file, grid_file, mlt_vals, mlat_vals, mlt_grid, mlat_grid, PARALLEL, artifact_file, SOLVER, omni_file
-    global dmsp_dir
+    global dmsp_dir, superdarn_dir
     base_dir = _base_dir
 
     # madrigal TEC data directory
@@ -33,6 +33,8 @@ def update(_base_dir="E:\\"):
     # SWARM data directory
     swarm_dir = os.path.join(base_dir, "swarm")
     swarm_coords_dir = os.path.join(swarm_dir, 'coords')
+
+    superdarn_dir = os.path.join(base_dir, 'superdarn')
 
     grid_file = os.path.join(tec_dir, "grid.h5")
     if os.path.exists(grid_file):

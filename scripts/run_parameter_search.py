@@ -2,7 +2,7 @@ if __name__ == "__main__":
     from ttools import compare
     from ttools.trough_labeling import *
 
-    N_TRAILS = 100  # number of trials for each parameter setting
+    N_TRAILS = 25  # number of trials for each parameter setting
     N_EXPERIMENTS = 200
 
     default_params = {
@@ -31,4 +31,5 @@ if __name__ == "__main__":
     }
 
     # compare.grid_parameter_search(default_params, grid_search_params, N_TRAILS)
-    compare.random_parameter_search(ImageProcessingLabelJob, N_EXPERIMENTS, N_TRAILS)
+    compare.random_parameter_search(RbfInversionLabelJob, N_EXPERIMENTS, N_TRAILS)
+    # compare.random_parameter_search(ImageProcessingLabelJob, N_EXPERIMENTS, N_TRAILS)

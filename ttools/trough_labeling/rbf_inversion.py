@@ -127,19 +127,20 @@ def run_multiple(args, parallel=True):
 
 
 PARAM_SAMPLING = {
-    'tv_weight': stats.loguniform(.001, 1),
-    'l2_weight': stats.loguniform(.001, 1),
-    'bge_spatial_size': stats.randint(4, 12),
-    'bge_temporal_rad': stats.randint(0, 3),
-    'rbf_bw': stats.randint(1, 4),
+    'tv_weight': stats.uniform(0, 1),
+    'l2_weight': stats.uniform(0, 1),
+    'bge_x_rad': stats.randint(6, 11),
+    'bge_y_rad': stats.randint(6, 11),
+    'bge_temporal_rad': stats.randint(0, 2),
+    'rbf_bw': stats.randint(1, 3),
     'tv_hw': stats.randint(1, 4),
     'tv_vw': stats.randint(1, 4),
-    'model_weight_max': stats.randint(1, 20),
+    'model_weight_max': stats.randint(1, 30),
     'perimeter_th': stats.randint(10, 100),
     'area_th': stats.randint(10, 100),
     'prior_order': [1, 2],
     'prior': ['empirical_model', 'auroral_boundary'],
-    'prior_offset': stats.randint(-5, 0),
+    'prior_offset': stats.randint(-5, 1),
 }
 
 BG_EST_SHAPE = (1, 19, 15)
@@ -147,14 +148,14 @@ MODEL_WEIGHT_MAX = 15
 RBF_BW = 1
 TV_HW = 2
 TV_VW = 1
-L2_WEIGHT = .07
+L2_WEIGHT = .06
 TV_WEIGHT = .15
 PERIMETER_TH = 40
 AREA_TH = 40
 PRIOR_ORDER = 1
-PRIOR = 'auroral_boundary'
+PRIOR = 'empirical_model'
 PRIOR_OFFSET = -3
-THRESHOLD = 1
+THRESHOLD = 0.7
 CLOSING_RAD = 0
 
 
@@ -164,8 +165,7 @@ class RbfInversionLabelJob(TroughLabelJob):
                  tv_vw=TV_VW, l2_weight=L2_WEIGHT, tv_weight=TV_WEIGHT, prior_order=PRIOR_ORDER, prior=PRIOR,
                  prior_offset=PRIOR_OFFSET, perimeter_th=PERIMETER_TH, area_th=AREA_TH, closing_rad=0,
                  threshold=THRESHOLD):
-        super().__init__(date, bg_est_shape, model_weight_max, rbf_bw, tv_hw, tv_vw, l2_weight, tv_weight, prior_order,
-                         prior, prior_offset, perimeter_th, area_th, threshold)
+        super().__init__(date, bg_est_shape=bg_est_shape)
         self.model_weight_max = model_weight_max
         self.rbf_bw = rbf_bw
         self.tv_vw = tv_vw
@@ -206,8 +206,6 @@ class RbfInversionLabelJob(TroughLabelJob):
     @staticmethod
     def get_random_params():
         params = {}
-        bge_temporal_size = 0
-        bge_spatial_size = 0
         for p in PARAM_SAMPLING:
             if isinstance(PARAM_SAMPLING[p], list):
                 val = PARAM_SAMPLING[p][np.random.randint(len(PARAM_SAMPLING[p]))]
@@ -216,14 +214,16 @@ class RbfInversionLabelJob(TroughLabelJob):
                     val = PARAM_SAMPLING[p].rvs().item()
                 except:
                     val = PARAM_SAMPLING[p].rvs()
-            if p == 'bge_temporal_rad':
-                bge_temporal_size = val * 2 + 1
-            elif p == 'bge_spatial_size':
-                bge_spatial_size = val * 2 + 1
-            else:
-                params[p] = val
-        params['bg_est_shape'] = (bge_temporal_size, bge_spatial_size, bge_spatial_size)
+            params[p] = val
+        params['bg_est_shape'] = (
+            params['bge_temporal_rad'] * 2 + 1,
+            params['bge_x_rad'] * 2 + 1,
+            params['bge_y_rad'] * 2 + 1,
+        )
         params['threshold'] = None
+        del params['bge_temporal_rad']
+        del params['bge_x_rad']
+        del params['bge_y_rad']
         return params
 
     def _plot_single(self, i, swarm_troughs, plot_dir):
@@ -231,7 +231,7 @@ class RbfInversionLabelJob(TroughLabelJob):
             'tec': {'data': self.tec[i + self.bg_est_shape[0] // 2], 'kwargs': dict(vmin=0, vmax=16)},
             'x': {'data': self.x[i], 'kwargs': dict(vmin=-.5, vmax=.5, cmap='coolwarm')},
             'output': {'data': self.model_output[i], 'kwargs': dict(vmin=-1.5, vmax=1.5, cmap='coolwarm')},
-            'trough': {'data': self.trough[i], 'kwargs': dict(cmap='Blues')},
+            'rbf_trough': {'data': self.trough[i], 'kwargs': dict(cmap='Blues')},
         }
         for name, plot in plots.items():
             fig, ax = plt.subplots(1, 1, figsize=(10, 10), subplot_kw=dict(projection='polar'), tight_layout=True)
